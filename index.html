@@ -44,6 +44,12 @@
       <div class="pill">Status: <span id="status">Ready</span></div>
     </div>
 
+    <div id="mobileFallback" style="display:none;gap:8px;margin:8px 0;flex-wrap:wrap">
+      <span class="pill" style="opacity:.8">Lib lỗi? Mở bằng ví:</span>
+      <a class="pill" id="openOkx" href="#">Open in OKX</a>
+      <a class="pill" id="openMM" href="#">Open in MetaMask</a>
+    </div>
+
     <canvas id="game" width="900" height="460" style="margin-top:12px"></canvas>
 
     <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
@@ -128,12 +134,20 @@ async function ensureWC(){
   return OK();
 }
 
+function showMobileFallback(){
+  const fb=document.getElementById('mobileFallback');
+  if(!fb) return; fb.style.display='flex';
+  const dapp=encodeURIComponent(location.href);
+  document.getElementById('openOkx').setAttribute('href',`okx://wallet/dapp?url=${dapp}`);
+  document.getElementById('openMM').setAttribute('href',`https://metamask.app.link/dapp/${location.host}${location.pathname}`);
+}
+
 async function connectWallet(){
   try{
     if(isMobile()){
       $('status').textContent='⏳ Loading WC...';
       const ok = await ensureWC();
-      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded'; return; }
+      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded'; showMobileFallback(); return; }
       const EP = window.WalletConnectProvider.EthereumProvider;
       const provider = await EP.init({
         projectId: WC_PROJECT_ID,
