@@ -159,11 +159,13 @@ function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent
       bar.style.width=Math.min(100,(earned/333)*100)+'%';
       ptxt.textContent=earned.toFixed(3)+' / 333 BANMAO';
       state.banana.vx*=1.02; state.banana.vy*=1.02;
+      window.__banmaoScore = score; // expose for claim button
     }
   });
+  window.__banmaoScore = score; // init
 })();
 
-/*********************** WALLETCONNECT LOADER (no-op if blocked) *************************/
+/*********************** WALLETCONNECT LOADER *************************/
 async function ensureWCLib(){
   if (window.WalletConnectProvider?.EthereumProvider) return true;
   if (window.WalletConnectProvider && typeof window.WalletConnectProvider.init==='function') return true;
@@ -174,9 +176,124 @@ async function ensureWCLib(){
   return new Promise(res=>{ s.onload=()=>res(!!window.WalletConnectProvider); s.onerror=()=>{ $('status').textContent='⚠️ WC lib failed, use fallback button'; res(false); }; });
 }
 
+/*********************** ONCHAIN CONFIG *************************/
+const TOKEN_ADDR = '0x16d91d1615fC55b76d5F92365BD60C069b46ef78';
+const GAME_ADDR  = '0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143';
+const XLAYER_CHAIN_ID_HEX = '0xC4'; // 196
+const MAX_BANMAO = 333;
+const WC_PROJECT_ID = 'cfda431a5eccf423674b212df85d492c';
+const GAME_ABI = [
+  'function claimReward(uint256 score) external',
+  'function claimed(address) view returns (bool)'
+];
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function decimals() view returns (uint8)'
+];
+
+/*********************** WALLET HELPERS *************************/
+function buildWCLinks(uri){
+  const enc = encodeURIComponent(uri);
+  return {
+    metamaskHttps: `https://metamask.app.link/wc?uri=${enc}`,
+    metamask:      `metamask://wc?uri=${enc}`,
+    okx:           `okx://wc?uri=${enc}`,
+    trustHttps:    `https://link.trustwallet.com/wc?uri=${enc}`,
+    trust:         `trust://wc?uri=${enc}`,
+    universal:     `https://walletconnect.com/wc?uri=${enc}`
+  };
+}
+function openWalletDeepLink(uri, preferred){
+  const links = buildWCLinks(uri);
+  const seq = preferred==='okx' ? [links.okx, links.universal]
+             : preferred==='trust' ? [links.trustHttps, links.trust, links.universal]
+             : [links.metamaskHttps, links.metamask, links.universal];
+  let i=0; (function next(){ if(i>=seq.length) return; location.href = seq[i++]; setTimeout(next, 900); })();
+}
+
+async function getWalletConnectProvider(preferred='metamask'){
+  const ok = await ensureWCLib(); if(!ok) return null;
+  const p = await window.WalletConnectProvider.EthereumProvider.init({
+    projectId: WC_PROJECT_ID,
+    chains: [1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
+    showQrModal: !isMobile(),
+    metadata:{ name:'Banmao Clicker', description:'Claim BANMAO', url: location.origin, icons:['/favicon.ico'] }
+  });
+  p.on?.('display_uri', (uri)=>{ if(isMobile()) openWalletDeepLink(uri, preferred); });
+  await p.connect();
+  return p;
+}
+
+async function pickInjected(mode){
+  // Mobile or explicit WalletConnect -> WC provider
+  if (isMobile() || mode==='walletconnect' || mode==='trust'){
+    const preferred = mode==='okx'?'okx':(mode==='trust'?'trust':'metamask');
+    return await getWalletConnectProvider(preferred);
+  }
+  // Desktop injected
+  const okx = (window.okxwallet?.ethereum || window.okxwallet) || null;
+  const mm  = (window.ethereum && window.ethereum.isMetaMask) ? window.ethereum : null;
+  const eth = window.ethereum || null;
+  if (mode==='okx') return okx; if (mode==='metamask') return mm; return okx || mm || eth;
+}
+
+async function ensureXLayer(injected){
+  try{
+    const id = await injected.request({ method:'eth_chainId' });
+    if (id === XLAYER_CHAIN_ID_HEX) return;
+    await injected.request({ method:'wallet_switchEthereumChain', params:[{ chainId: XLAYER_CHAIN_ID_HEX }] });
+  }catch(e){
+    if (e?.code===4902){
+      await injected.request({ method:'wallet_addEthereumChain', params:[{ chainId: XLAYER_CHAIN_ID_HEX, chainName:'X Layer Mainnet', rpcUrls:['https://rpc.xlayer.tech'], nativeCurrency:{name:'OKB',symbol:'OKB',decimals:18}, blockExplorerUrls:['https://www.oklink.com/xlayer'] }] });
+    } else throw e;
+  }
+}
+
+let provider, signer, account, tokenDecimals=18;
+async function updateBalance(){
+  try{ if(!provider||!account) return; const token=new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider); tokenDecimals=await token.decimals(); const bal=await token.balanceOf(account); $('balance').textContent=ethers.formatUnits(bal, tokenDecimals); }catch{ $('balance').textContent='—'; }
+}
+async function checkClaimed(){
+  try{ if(!provider||!account) return; const game=new ethers.Contract(GAME_ADDR, GAME_ABI, provider); const done=await game.claimed(account); if(done){ $('status').textContent='✅ Already claimed'; $('claim').disabled=true; } else { $('status').textContent='Ready to claim'; $('claim').disabled=false; } }catch{}
+}
+
+/*********************** WIRE BUTTONS *************************/
+$('connect').addEventListener('click', async ()=>{
+  try{
+    $('status').textContent='🔎 Finding wallet...';
+    const mode = $('walletSelect').value;
+    const injected = await pickInjected(mode);
+    if(!injected){ $('status').textContent='❌ Wallet not found'; return; }
+    $('status').textContent='🧾 Requesting permission...';
+    let accounts; try{ accounts = await injected.request?.({ method:'eth_requestAccounts' }); }catch{ accounts = injected.accounts || []; }
+    account = (accounts && accounts[0]) || injected.accounts?.[0];
+    if(!account){ $('status').textContent='❌ No account'; return; }
+    $('status').textContent='🔁 Switching network...';
+    try{ await ensureXLayer(injected); }catch{ $('status').textContent='⚠️ Switch to X Layer (196) in wallet'; }
+    provider = new ethers.BrowserProvider(injected); signer = await provider.getSigner();
+    $('addr').textContent = account.slice(0,6)+'...'+account.slice(-4);
+    $('status').textContent='✅ Connected';
+    await updateBalance(); await checkClaimed();
+  }catch(err){ console.error('CONNECT_ERR',err); $('status').textContent='❌ '+(err?.shortMessage||err?.message||err); }
+});
+
+$('claim').addEventListener('click', async ()=>{
+  try{
+    if(!signer) return alert('Connect wallet first!');
+    const currentScore = window.__banmaoScore || 0;
+    const banmaoNow = currentScore/10; if (banmaoNow < 1) return alert('Need at least 1 BANMAO to claim!');
+    const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
+    const game = new ethers.Contract(GAME_ADDR, GAME_ABI, signer);
+    const tx = await game.claimReward(amount);
+    $('status').textContent='⏳ Tx: '+tx.hash; $('claim').disabled=true; await tx.wait();
+    $('status').textContent='✅ Claim succeeded ('+amount+' BANMAO)'; await updateBalance(); await checkClaimed();
+  }catch(e){ $('status').textContent='❌ '+(e?.shortMessage||e?.reason||e?.message||e); $('claim').disabled=false; }
+});
+
 /*********************** BASIC TESTS *************************/
 (function selfTests(){
   try{ console.log('[SelfTest] canvas ok =', !!$('game').getContext); }catch(e){ console.error('[SelfTest] canvas error', e); }
+  console.log('[SelfTest] connect button =', !!$('connect'));
 })();
 </script>
 </body>
