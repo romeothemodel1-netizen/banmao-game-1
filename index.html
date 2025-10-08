@@ -7,6 +7,7 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
+<!-- WalletConnect v2 UMD build -->
 <script src="https://unpkg.com/@walletconnect/ethereum-provider/dist/umd/index.min.js"></script>
 
 <style>
@@ -70,93 +71,97 @@
 </div>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-let score=0; const maxScore=333;
-let banana={x:200,y:250,dx:2,dy:2,angle:0};
-let cat={x:140,y:300};
+// =================== GAME (Cat + Banana) ===================
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let score=0; const maxScore=333;
+  let banana={x:canvas.width*0.7,y:canvas.height*0.6,dx:2.1,dy:1.7,angle:0};
+  let cat={x:160,y:290};
 
-function drawCat(){
-  ctx.fillStyle='#ffcc00';
-  ctx.beginPath();ctx.arc(cat.x,cat.y,60,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.moveTo(cat.x-40,cat.y-30);ctx.lineTo(cat.x-10,cat.y-80);ctx.lineTo(cat.x,cat.y-40);ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.moveTo(cat.x+40,cat.y-30);ctx.lineTo(cat.x+10,cat.y-80);ctx.lineTo(cat.x,cat.y-40);ctx.closePath();ctx.fill();
-  ctx.fillStyle='black';ctx.beginPath();ctx.arc(cat.x-20,cat.y-10,7,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(cat.x+20,cat.y-10,7,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.moveTo(cat.x-6,cat.y+5);ctx.lineTo(cat.x+6,cat.y+5);ctx.lineTo(cat.x,cat.y+15);ctx.closePath();ctx.fill();
-  ctx.beginPath();ctx.arc(cat.x-8,cat.y+20,8,0,Math.PI,false);ctx.stroke();
-  ctx.beginPath();ctx.arc(cat.x+8,cat.y+20,8,0,Math.PI,false);ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cat.x-25,cat.y);ctx.lineTo(cat.x-60,cat.y-10);
-  ctx.moveTo(cat.x-25,cat.y+10);ctx.lineTo(cat.x-60,cat.y+10);
-  ctx.moveTo(cat.x-25,cat.y+20);ctx.lineTo(cat.x-60,cat.y+30);
-  ctx.moveTo(cat.x+25,cat.y);ctx.lineTo(cat.x+60,cat.y-10);
-  ctx.moveTo(cat.x+25,cat.y+10);ctx.lineTo(cat.x+60,cat.y+10);
-  ctx.moveTo(cat.x+25,cat.y+20);ctx.lineTo(cat.x+60,cat.y+30);
-  ctx.strokeStyle='black';ctx.stroke();
-}
-
-function drawBanana(){
-  ctx.save();
-  ctx.translate(banana.x,banana.y);
-  ctx.rotate(banana.angle);
-  // phần thân cong vàng
-  ctx.beginPath();
-  ctx.strokeStyle='#f1c40f';
-  ctx.lineWidth=26;
-  ctx.arc(0,0,40,0.25*Math.PI,1.25*Math.PI);
-  ctx.stroke();
-  // viền nâu mảnh hơn
-  ctx.beginPath();
-  ctx.strokeStyle='#d35400';
-  ctx.lineWidth=6;
-  ctx.arc(0,0,40,0.25*Math.PI,1.25*Math.PI);
-  ctx.stroke();
-  // đầu cuống chuối
-  ctx.fillStyle='#d35400';
-  ctx.beginPath();ctx.arc(-30,-25,8,0,Math.PI*2);ctx.fill();
-  // đầu nhọn chuối
-  ctx.fillStyle='#f39c12';
-  ctx.beginPath();ctx.arc(35,25,10,0,Math.PI*2);ctx.fill();
-  ctx.restore();
-}
-
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawCat();
-  drawBanana();
-}
-
-function update(){
-  banana.x+=banana.dx;
-  banana.y+=banana.dy;
-  banana.angle+=0.02;
-  if(banana.x>canvas.width-40||banana.x<40) banana.dx*=-1;
-  if(banana.y>canvas.height-40||banana.y<40) banana.dy*=-1;
-}
-
-function loop(){
-  update();draw();requestAnimationFrame(loop);
-}
-loop();
-
-canvas.addEventListener('click',e=>{
-  const rect=canvas.getBoundingClientRect();
-  const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
-  const my=(e.clientY-rect.top)*(canvas.height/rect.height);
-  const dx=mx-banana.x,dy=my-banana.y;
-  if(Math.sqrt(dx*dx+dy*dy)<50){
-    if(score<maxScore){
-      score++;
-      document.getElementById('score').textContent=score;
-      document.getElementById('earned').textContent=score.toFixed(3);
-      let p=(score/maxScore)*100;
-      document.getElementById('progressBar').style.width=p+'%';
-      document.getElementById('progressText').textContent=score+' / '+maxScore+' BANMAO';
-    }
+  function drawCat(){
+    // head
+    ctx.fillStyle='#ffd84d';
+    ctx.beginPath();ctx.arc(cat.x,cat.y,62,0,Math.PI*2);ctx.fill();
+    // ears
+    ctx.beginPath();ctx.moveTo(cat.x-42,cat.y-28);ctx.lineTo(cat.x-12,cat.y-82);ctx.lineTo(cat.x,cat.y-40);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(cat.x+42,cat.y-28);ctx.lineTo(cat.x+12,cat.y-82);ctx.lineTo(cat.x,cat.y-40);ctx.closePath();ctx.fill();
+    // face
+    ctx.fillStyle='#111';
+    ctx.beginPath();ctx.arc(cat.x-20,cat.y-6,7,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(cat.x+20,cat.y-6,7,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.moveTo(cat.x-6,cat.y+8);ctx.lineTo(cat.x+6,cat.y+8);ctx.lineTo(cat.x,cat.y+16);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#111';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.arc(cat.x-8,cat.y+22,8,0,Math.PI,false);ctx.arc(cat.x+8,cat.y+22,8,0,Math.PI,false);ctx.stroke();
+    // whiskers
+    ctx.beginPath();
+    ctx.moveTo(cat.x-28,cat.y+2);ctx.lineTo(cat.x-63,cat.y-8);
+    ctx.moveTo(cat.x-28,cat.y+12);ctx.lineTo(cat.x-63,cat.y+12);
+    ctx.moveTo(cat.x-28,cat.y+22);ctx.lineTo(cat.x-63,cat.y+32);
+    ctx.moveTo(cat.x+28,cat.y+2);ctx.lineTo(cat.x+63,cat.y-8);
+    ctx.moveTo(cat.x+28,cat.y+12);ctx.lineTo(cat.x+63,cat.y+12);
+    ctx.moveTo(cat.x+28,cat.y+22);ctx.lineTo(cat.x+63,cat.y+32);
+    ctx.stroke();
   }
-});
+
+  function drawBanana(){
+    ctx.save();
+    ctx.translate(banana.x,banana.y);
+    ctx.rotate(banana.angle);
+    // body
+    ctx.beginPath();ctx.lineWidth=26;ctx.strokeStyle='#f1c40f';
+    ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI);ctx.stroke();
+    // thin rim
+    ctx.beginPath();ctx.lineWidth=6;ctx.strokeStyle='#d35400';
+    ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI);ctx.stroke();
+    // stalk + tip
+    ctx.fillStyle='#d35400';ctx.beginPath();ctx.arc(-32,-28,7,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#f39c12';ctx.beginPath();ctx.arc(36,28,9,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(){
+    // subtle grid bg
+    ctx.fillStyle='#101010';ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='#1a1a1a';ctx.lineWidth=1;
+    for(let x=0;x<canvas.width;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+    for(let y=0;y<canvas.height;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
+    drawCat();
+    drawBanana();
+  }
+
+  function update(){
+    banana.x+=banana.dx; banana.y+=banana.dy; banana.angle+=0.02;
+    if(banana.x>canvas.width-48||banana.x<48) banana.dx*=-1;
+    if(banana.y>canvas.height-48||banana.y<48) banana.dy*=-1;
+  }
+
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
+  loop();
+
+  function hit(mx,my){ const dx=mx-banana.x, dy=my-banana.y; return Math.hypot(dx,dy) < 56; }
+  const scoreEl=document.getElementById('score');
+  const earnedEl=document.getElementById('earned');
+  const bar=document.getElementById('progressBar');
+  const ptxt=document.getElementById('progressText');
+
+  canvas.addEventListener('click',e=>{
+    const r=canvas.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*(canvas.width/r.width);
+    const my=(e.clientY-r.top)*(canvas.height/r.height);
+    if(hit(mx,my)){
+      score=Math.min(maxScore, score+10);
+      scoreEl.textContent=score;
+      const earned=score/10; earnedEl.textContent=earned.toFixed(3);
+      const pct=Math.min(100,(earned/maxScore)*100); bar.style.width=pct+'%';
+      ptxt.textContent=earned.toFixed(3)+" / "+maxScore+" BANMAO";
+      // pop
+      banana.dx*=1.02; banana.dy*=1.02;
+    }
+  });
+})();
+
 // ================== WALLET CONNECT (MetaMask / OKX / Trust / WalletConnect) ==================
-// Onchain config
 const TOKEN_ADDR = "0x16d91d1615fC55b76d5F92365BD60C069b46ef78";
 const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143";
 const MAX_BANMAO = 333;
@@ -172,7 +177,6 @@ const ERC20_ABI = [
   "function decimals() view returns (uint8)"
 ];
 
-// UI refs
 const walletSelect = document.getElementById("walletSelect");
 const connectBtn = document.getElementById("connect");
 const claimBtn   = document.getElementById("claim");
@@ -182,7 +186,6 @@ const statusEl = document.getElementById("status");
 
 function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
 
-// Deep link helper for mobile WC
 function openWalletDeepLink(uri, preferred="metamask"){
   const enc = encodeURIComponent(uri);
   const links = {
@@ -194,135 +197,87 @@ function openWalletDeepLink(uri, preferred="metamask"){
     universal:     `https://walletconnect.com/wc?uri=${enc}`
   };
   if (preferred === "metamask") {
-    window.location.href = links.metamaskHttps; setTimeout(()=>window.location.href=links.metamask,800); setTimeout(()=>window.location.href=links.universal,1600);
+    location.href = links.metamaskHttps; setTimeout(()=>location.href=links.metamask,800); setTimeout(()=>location.href=links.universal,1600);
   } else if (preferred === "okx") {
-    window.location.href = links.okx; setTimeout(()=>window.location.href=links.universal,1200);
+    location.href = links.okx; setTimeout(()=>location.href=links.universal,1200);
   } else if (preferred === "trust") {
-    window.location.href = links.trustHttps; setTimeout(()=>window.location.href=links.trust,800); setTimeout(()=>window.location.href=links.universal,1600);
-  } else {
-    window.location.href = links.universal;
-  }
+    location.href = links.trustHttps; setTimeout(()=>location.href=links.trust,800); setTimeout(()=>location.href=links.universal,1600);
+  } else { location.href = links.universal; }
 }
 
 async function getWalletConnectProvider(preferred="metamask"){
-  if (!window.WalletConnectProvider) { alert("WalletConnect lib chưa tải. Refresh trang."); return null; }
+  if (!window.WalletConnectProvider){ alert('WalletConnect lib chưa tải. Refresh trang.'); return null; }
   const provider = await window.WalletConnectProvider.EthereumProvider.init({
     projectId: WC_PROJECT_ID,
-    chains: [1],
-    optionalChains: [196],
-    rpcMap: { 196: "https://rpc.xlayer.tech" },
+    chains: [1], optionalChains: [196], rpcMap: { 196: 'https://rpc.xlayer.tech' },
     showQrModal: !isMobile(),
-    metadata: { name: "Banmao Clicker", description: "Claim BANMAO từ game clicker", url: location.origin, icons: ["/favicon.ico"] },
-    methods: ["eth_requestAccounts","eth_sendTransaction","personal_sign","wallet_switchEthereumChain","wallet_addEthereumChain"],
-    events: ["chainChanged","accountsChanged","disconnect"]
+    metadata: { name:'Banmao Clicker', description:'Claim BANMAO', url: location.origin, icons:['/favicon.ico'] },
+    methods:["eth_requestAccounts","eth_sendTransaction","personal_sign","wallet_switchEthereumChain","wallet_addEthereumChain"],
+    events:["chainChanged","accountsChanged","disconnect"]
   });
-  provider.on?.("display_uri", (uri) => { if (isMobile()) openWalletDeepLink(uri, preferred); });
+  provider.on?.('display_uri', (uri)=>{ if(isMobile()) openWalletDeepLink(uri, preferred); });
   await provider.connect();
   return provider;
 }
 
 async function pickInjected(mode){
-  if (mode === "walletconnect" || isMobile()) return await getWalletConnectProvider(mode === 'trust' ? 'trust' : (mode==='okx'?'okx':'metamask'));
+  if (mode === 'walletconnect' || isMobile()) return await getWalletConnectProvider(mode==='trust'?'trust':(mode==='okx'?'okx':'metamask'));
   const okx = (window.okxwallet?.ethereum || window.okxwallet) || null;
   const mm  = (window.ethereum && window.ethereum.isMetaMask) ? window.ethereum : null;
-  const eth = window.ethereum || null; // Trust/others sometimes inject the same object
-  if (mode === 'okx') return okx;
-  if (mode === 'metamask') return mm;
-  if (mode === 'trust') return eth; // try injected first; if not present, user chọn WalletConnect
-  return okx || mm || eth;
+  const eth = window.ethereum || null; // Trust/others
+  if (mode==='okx') return okx; if (mode==='metamask') return mm; if(mode==='trust') return eth; return okx || mm || eth;
 }
 
 async function ensureXLayer(injected){
   try{
-    const id = await injected.request({ method: "eth_chainId" });
+    const id = await injected.request({ method:'eth_chainId' });
     if (id === XLAYER_CHAIN_ID_HEX) return;
-    await injected.request({ method:"wallet_switchEthereumChain", params:[{ chainId: XLAYER_CHAIN_ID_HEX }] });
+    await injected.request({ method:'wallet_switchEthereumChain', params:[{ chainId: XLAYER_CHAIN_ID_HEX }] });
   }catch(e){
-    if (e?.code===4902 || /Unrecognized|not added/i.test(e?.message||"")){
-      await injected.request({ method:"wallet_addEthereumChain", params:[{ chainId: XLAYER_CHAIN_ID_HEX, chainName: "X Layer Mainnet", rpcUrls: ["https://rpc.xlayer.tech"], nativeCurrency: { name:"OKB", symbol:"OKB", decimals:18 }, blockExplorerUrls:["https://www.oklink.com/xlayer"] }]} );
+    if (e?.code===4902 || /Unrecognized|not added/i.test(e?.message||'')){
+      await injected.request({ method:'wallet_addEthereumChain', params:[{ chainId: XLAYER_CHAIN_ID_HEX, chainName:'X Layer Mainnet', rpcUrls:['https://rpc.xlayer.tech'], nativeCurrency:{name:'OKB',symbol:'OKB',decimals:18}, blockExplorerUrls:['https://www.oklink.com/xlayer'] }] });
     } else throw e;
   }
 }
 
-let provider, signer, account, tokenDecimals = 18;
+let provider, signer, account, tokenDecimals=18;
 
 async function updateBalance(){
-  try{
-    if(!provider || !account) return;
-    const token = new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider);
-    tokenDecimals = await token.decimals();
-    const bal = await token.balanceOf(account);
-    balEl.textContent = ethers.formatUnits(bal, tokenDecimals);
-  }catch(e){ balEl.textContent = '—'; }
+  try{ if(!provider||!account) return; const token=new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider); tokenDecimals=await token.decimals(); const bal=await token.balanceOf(account); balEl.textContent=ethers.formatUnits(bal, tokenDecimals); }catch{ balEl.textContent='—'; }
 }
-
 async function checkClaimed(){
-  try{
-    if(!provider || !account) return;
-    const game = new ethers.Contract(GAME_ADDR, GAME_ABI, provider);
-    const done = await game.claimed(account);
-    if (done){ statusEl.textContent = '✅ Already claimed'; claimBtn.disabled = true; }
-    else { statusEl.textContent = 'Ready to claim'; claimBtn.disabled = false; }
-  }catch{ /* ignore */ }
+  try{ if(!provider||!account) return; const game=new ethers.Contract(GAME_ADDR, GAME_ABI, provider); const done=await game.claimed(account); if(done){ statusEl.textContent='✅ Already claimed'; claimBtn.disabled=true; } else { statusEl.textContent='Ready to claim'; claimBtn.disabled=false; } }catch{}
 }
 
 connectBtn.addEventListener('click', async ()=>{
   try{
-    statusEl.textContent = '🔎 Tìm ví...';
-    const mode = walletSelect.value;
+    statusEl.textContent='🔎 Tìm ví...';
+    const mode = document.getElementById('walletSelect').value;
     const injected = await pickInjected(mode);
-    if (!injected){ statusEl.textContent='No wallet'; alert('Không tìm thấy ví. Hãy dùng WalletConnect hoặc cài extension.'); return; }
-
-    statusEl.textContent = '🧾 Yêu cầu quyền...';
-    let accounts;
-    try { accounts = await injected.request?.({ method: 'eth_requestAccounts' }); } catch { accounts = injected.accounts || []; }
+    if(!injected){ statusEl.textContent='No wallet'; alert('Không tìm thấy ví. Dùng WalletConnect hoặc cài extension.'); return; }
+    statusEl.textContent='🧾 Yêu cầu quyền...';
+    let accounts; try{ accounts = await injected.request?.({ method:'eth_requestAccounts' }); }catch{ accounts = injected.accounts || []; }
     account = (accounts && accounts[0]) || injected.accounts?.[0];
-    if (!account){ statusEl.textContent = 'No account'; return; }
-
-    statusEl.textContent = '🔁 Chuyển mạng...';
-    try { await ensureXLayer(injected); } catch { statusEl.textContent = '⚠️ Hãy chuyển sang X Layer (196) trên ví rồi thử lại.'; }
-
-    provider = new ethers.BrowserProvider(injected);
-    signer   = await provider.getSigner();
+    if(!account){ statusEl.textContent='No account'; return; }
+    statusEl.textContent='🔁 Chuyển mạng...';
+    try{ await ensureXLayer(injected); }catch{ statusEl.textContent='⚠️ Hãy chuyển sang X Layer (196) trên ví rồi thử lại.'; }
+    provider = new ethers.BrowserProvider(injected); signer = await provider.getSigner();
     addrEl.textContent = account.slice(0,6)+'...'+account.slice(-4);
-    statusEl.textContent = '✅ Connected';
-    await updateBalance();
-    await checkClaimed();
-  }catch(err){
-    console.error('CONNECT_ERR', err);
-    statusEl.textContent = '❌ '+(err?.shortMessage||err?.message||err);
-  }
+    statusEl.textContent='✅ Connected';
+    await updateBalance(); await checkClaimed();
+  }catch(err){ console.error('CONNECT_ERR',err); statusEl.textContent='❌ '+(err?.shortMessage||err?.message||err); }
 });
 
-// Mobile quick buttons -> open app via WalletConnect
-const openMM     = document.getElementById('openMM');
-const openOKX    = document.getElementById('openOKX');
-const openTrust  = document.getElementById('openTrust');
-const wcQuickBtn = document.getElementById('wcQuick');
-openMM?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('metamask'); });
-openOKX?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('okx'); });
-openTrust?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('trust'); });
-wcQuickBtn?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('metamask'); });
-
-// Claim logic: 10 score = 1 BANMAO, capped at 333
 claimBtn.addEventListener('click', async ()=>{
   try{
-    if (!signer) return alert('Connect wallet first!');
-    const banmaoNow = score/10; // earned by game
-    if (banmaoNow < 1) return alert('Need at least 1 BANMAO to claim!');
+    if(!signer) return alert('Connect wallet first!');
+    const banmaoNow = score/10; if (banmaoNow < 1) return alert('Need at least 1 BANMAO to claim!');
     const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
     const game = new ethers.Contract(GAME_ADDR, GAME_ABI, signer);
     const tx = await game.claimReward(amount);
-    statusEl.textContent = '⏳ Tx: '+tx.hash;
-    claimBtn.disabled = true;
-    await tx.wait();
-    statusEl.textContent = '✅ Claim succeeded ('+amount+' BANMAO)';
-    await updateBalance();
-    await checkClaimed();
-  }catch(e){
-    statusEl.textContent = '❌ '+(e?.shortMessage||e?.reason||e?.message||e);
-    claimBtn.disabled = false;
-  }
+    statusEl.textContent='⏳ Tx: '+tx.hash; claimBtn.disabled=true; await tx.wait();
+    statusEl.textContent='✅ Claim succeeded ('+amount+' BANMAO)'; await updateBalance(); await checkClaimed();
+  }catch(e){ statusEl.textContent='❌ '+(e?.shortMessage||e?.reason||e?.message||e); claimBtn.disabled=false; }
 });
 </script>
 
