@@ -7,8 +7,8 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
-<!-- WalletConnect UMD (primary) -->
-<script src="https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js"></script>
+<!-- WalletConnect UMD -->
+<script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js"></script>
 
 <style>
   :root { --yellow:#ffd84d; }
@@ -41,24 +41,10 @@
           <option value="metamask">Force MetaMask</option>
           <option value="trust">Force Trust Wallet</option>
           <option value="walletconnect">WalletConnect (QR / Mobile)</option>
-          <option value="coinbase">Force Coinbase Wallet</option>
-          <option value="rainbow">Force Rainbow</option>
-          <option value="bitget">Force Bitget</option>
         </select>
         <button id="connect" class="btn">Connect Wallet</button>
         <button id="claim" class="btn">Claim BANMAO</button>
       </div>
-    </div>
-
-    <div class="mobile-banner">
-      <span style="opacity:.8">On mobile?</span>
-      <a class="linkbtn" href="#" id="openMM">MetaMask</a>
-      <a class="linkbtn" href="#" id="openOKX">OKX</a>
-      <a class="linkbtn" href="#" id="openTrust">Trust</a>
-      <a class="linkbtn" href="#" id="openCBW">Coinbase</a>
-      <a class="linkbtn" href="#" id="openRainbow">Rainbow</a>
-      <a class="linkbtn" href="#" id="openBitget">Bitget</a>
-      <a class="linkbtn" href="#" id="wcQuick">WalletConnect Auto</a>
     </div>
 
     <div class="row" style="margin-top:-6px;gap:10px">
@@ -77,179 +63,34 @@
 </div>
 
 <script>
-/*********************** UTIL *************************/
 const $ = (id)=>document.getElementById(id);
 const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-/*********************** GAME (Cat + Banana) *************************/
-(function initGame(){
-  const canvas = $('game');
-  const ctx = canvas.getContext('2d');
-  let score = 0; const MAX_BANMAO = 333;
-  const state = { banana:{ x:canvas.width*0.75, y:canvas.height*0.7, vx:2.2, vy:1.8, angle:0 }, cat:{ x:170, y:300 } };
-
-  function bg(){ ctx.fillStyle='#101010'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1; for(let x=0;x<canvas.width;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();} for(let y=0;y<canvas.height;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();} }
-  function drawCat(){ const {x,y}=state.cat; ctx.fillStyle='#ffd84d'; ctx.beginPath(); ctx.arc(x,y,62,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(x-42,y-28); ctx.lineTo(x-12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(x+42,y-28); ctx.lineTo(x+12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill(); ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x-20,y-6,7,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x+20,y-6,7,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(x-6,y+8); ctx.lineTo(x+6,y+8); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill(); ctx.strokeStyle='#111'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(x-8,y+22,8,0,Math.PI,false); ctx.arc(x+8,y+22,8,0,Math.PI,false); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x-28,y+2); ctx.lineTo(x-63,y-8); ctx.moveTo(x-28,y+12); ctx.lineTo(x-63,y+12); ctx.moveTo(x-28,y+22); ctx.lineTo(x-63,y+32); ctx.moveTo(x+28,y+2); ctx.lineTo(x+63,y-8); ctx.moveTo(x+28,y+12); ctx.lineTo(x+63,y+12); ctx.moveTo(x+28,y+22); ctx.lineTo(x+63,y+32); ctx.stroke(); }
-  function drawBanana(){ const b=state.banana; ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.angle); ctx.beginPath(); ctx.lineWidth=26; ctx.strokeStyle='#f1c40f'; ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI); ctx.stroke(); ctx.beginPath(); ctx.lineWidth=6; ctx.strokeStyle='#d35400'; ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI); ctx.stroke(); ctx.fillStyle='#d35400'; ctx.beginPath(); ctx.arc(-32,-28,7,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#f39c12'; ctx.beginPath(); ctx.arc(36,28,9,0,Math.PI*2); ctx.fill(); ctx.restore(); }
-  function update(){ const b=state.banana; b.x+=b.vx; b.y+=b.vy; b.angle+=0.02; if(b.x>canvas.width-48||b.x<48) b.vx*=-1; if(b.y>canvas.height-48||b.y<48) b.vy*=-1; }
-  function draw(){ bg(); drawCat(); drawBanana(); }
-  (function loop(){ update(); draw(); requestAnimationFrame(loop); })();
-
-  const scoreEl=$('score'), earnedEl=$('earned'), bar=$('progressBar'), ptxt=$('progressText');
-  function hit(mx,my){ const dx=mx-state.banana.x, dy=my-state.banana.y; return Math.hypot(dx,dy)<56; }
-  canvas.addEventListener('click', (e)=>{ const r=canvas.getBoundingClientRect(); const mx=(e.clientX-r.left)*(canvas.width/r.width); const my=(e.clientY-r.top)*(canvas.height/r.height); if(hit(mx,my)){ score=Math.min(333,score+10); scoreEl.textContent=score; const earned=score/10; earnedEl.textContent=earned.toFixed(3); bar.style.width=Math.min(100,(earned/333)*100)+'%'; ptxt.textContent=earned.toFixed(3)+' / 333 BANMAO'; state.banana.vx*=1.02; state.banana.vy*=1.02; window.__banmaoScore=score; } });
-  window.__banmaoScore=score;
+// Game
+(function(){
+  const canvas=$('game');const ctx=canvas.getContext('2d');
+  let score=0;const MAX=333;
+  const state={banana:{x:canvas.width*0.7,y:canvas.height*0.5,vx:2,vy:2,angle:0},cat:{x:160,y:300}};
+  function bg(){ctx.fillStyle='#101010';ctx.fillRect(0,0,canvas.width,canvas.height);} 
+  function cat(){const{x,y}=state.cat;ctx.fillStyle='#ffd84d';ctx.beginPath();ctx.arc(x,y,60,0,Math.PI*2);ctx.fill();}
+  function banana(){const b=state.banana;ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.strokeStyle='#f1c40f';ctx.lineWidth=20;ctx.beginPath();ctx.arc(0,0,40,0.25*Math.PI,1.25*Math.PI);ctx.stroke();ctx.restore();}
+  function update(){const b=state.banana;b.x+=b.vx;b.y+=b.vy;b.angle+=0.02;if(b.x<40||b.x>canvas.width-40) b.vx*=-1;if(b.y<40||b.y>canvas.height-40) b.vy*=-1;}
+  function loop(){update();bg();cat();banana();requestAnimationFrame(loop);} loop();
+  canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();const mx=(e.clientX-r.left)*(canvas.width/r.width);const my=(e.clientY-r.top)*(canvas.height/r.height);const dx=mx-state.banana.x,dy=my-state.banana.y;if(Math.hypot(dx,dy)<50){score=Math.min(MAX,score+10);$('score').textContent=score;$('earned').textContent=(score/10).toFixed(3);$('progressBar').style.width=Math.min(100,(score/10)/MAX*100)+'%';$('progressText').textContent=(score/10).toFixed(3)+' / 333 BANMAO';window.__banmaoScore=score;}});
 })();
 
-/*********************** ONCHAIN CONFIG *************************/
-const TOKEN_ADDR = '0x16d91d1615fC55b76d5F92365BD60C069b46ef78';
-const GAME_ADDR  = '0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143';
-const XLAYER_CHAIN_ID_HEX = '0xC4'; // 196
-const MAX_BANMAO = 333;
-const WC_PROJECT_ID = 'cfda431a5eccf423674b212df85d492c';
-const GAME_ABI = [ 'function claimReward(uint256 score) external', 'function claimed(address) view returns (bool)' ];
-const ERC20_ABI = [ 'function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)' ];
-
-/*********************** WC Deeplink helpers *************************/
-function wcLinks(uri){
-  const enc=encodeURIComponent(uri);
-  return {
-    metamaskHttps:`https://metamask.app.link/wc?uri=${enc}`,
-    metamask:`metamask://wc?uri=${enc}`,
-    okx:`okx://wc?uri=${enc}`,
-    okxIntent:`intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;end`,
-    trustHttps:`https://link.trustwallet.com/wc?uri=${enc}`,
-    trust:`trust://wc?uri=${enc}`,
-    coinbaseHttps:`https://go.cb-w.com/wc?uri=${enc}`,
-    coinbase:`coinbase://wallet/wc?uri=${enc}`,
-    rainbowHttps:`https://rainbow.me/wc?uri=${enc}`,
-    rainbow:`rainbow://wc?uri=${enc}`,
-    bitget:`bitkeep://wc?uri=${enc}`,
-    universal:`https://walletconnect.com/wc?uri=${enc}`
-  };
-}
-
-let __deepLinkWindow = null;
-function openWcDeeplink(uri, pref){
-  const L=wcLinks(uri);
-  const nav=(href)=>{ try{ if(__deepLinkWindow && !__deepLinkWindow.closed){ __deepLinkWindow.location.href = href; } else { location.href = href; } }catch{ location.href = href; } };
-  const seq = pref==='okx' ? [L.okxIntent, L.okx, L.universal]
-            : pref==='trust' ? [L.trustHttps, L.trust, L.universal]
-            : pref==='coinbase' ? [L.coinbaseHttps, L.coinbase, L.universal]
-            : pref==='rainbow' ? [L.rainbowHttps, L.rainbow, L.universal]
-            : pref==='bitget' ? [L.bitget, L.universal]
-            : [L.metamaskHttps, L.metamask, L.universal];
-  let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step, 1000); })();
-}
-
-/*********************** WalletConnect bootstrap *************************/
-async function ensureWCLib(){
-  if (window.WalletConnectProvider?.EthereumProvider) return true;
-  if (window.WalletConnectProvider && typeof window.WalletConnectProvider.init==='function') return true;
-  $('status').textContent='⏳ Loading WalletConnect...';
-  const sources=[
-    'https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
-    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js'
-  ];
-  for (const src of sources){
-    const ok = await new Promise(res=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(true); s.onerror=()=>res(false); document.head.appendChild(s); });
-    if (ok && (window.WalletConnectProvider?.EthereumProvider || window.WalletConnectProvider)) return true;
-  }
-  return false;
-}
-
-async function startWalletConnect(preferred){
-  const ok = await ensureWCLib();
-  if (!ok) { $('status').textContent='❌ WC lib blocked'; return null; }
-  // Prefer X Layer (196) when user selects OKX, others default to 1 and allow 196 as optional
-  const isOKX = preferred==='okx';
-  const chains = isOKX ? [196] : [1];
-  const optionalChains = isOKX ? [] : [196];
-  const p = await window.WalletConnectProvider.EthereumProvider.init({
-    projectId: WC_PROJECT_ID,
-    chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
-    showQrModal: !isMobile(),
-    metadata:{ name:'Banmao Clicker', description:'Claim BANMAO', url: location.origin, icons:['/favicon.ico'] },
-    methods:["eth_requestAccounts","eth_sendTransaction","personal_sign","wallet_switchEthereumChain","wallet_addEthereumChain"],
-    events:["chainChanged","accountsChanged","disconnect"]
-  });
-  // Mobile: deeplink ngay khi có URI
-  p.on?.('display_uri', (uri)=>{ if(isMobile()) openWcDeeplink(uri, preferred); });
-  await p.connect();
-  return p;
-}
-
-/*********************** Connect flow *************************/
-let provider, signer, account, tokenDecimals=18;
-async function updateBalance(){ try{ if(!provider||!account) return; const token=new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider); tokenDecimals=await token.decimals(); const bal=await token.balanceOf(account); $('balance').textContent=ethers.formatUnits(bal, tokenDecimals); }catch{ $('balance').textContent='—'; } }
-async function checkClaimed(){ try{ if(!provider||!account) return; const game=new ethers.Contract(GAME_ADDR, GAME_ABI, provider); const done=await game.claimed(account); if(done){ $('status').textContent='✅ Already claimed'; $('claim').disabled=true; } else { $('status').textContent='Ready to claim'; $('claim').disabled=false; } }catch{} }
-async function ensureXLayer(injected){ try{ const id=await injected.request({method:'eth_chainId'}); if(id===XLAYER_CHAIN_ID_HEX) return; await injected.request({method:'wallet_switchEthereumChain', params:[{chainId:XLAYER_CHAIN_ID_HEX}]}); }catch(e){ if(e?.code===4902){ await injected.request({method:'wallet_addEthereumChain', params:[{chainId:XLAYER_CHAIN_ID_HEX, chainName:'X Layer Mainnet', rpcUrls:['https://rpc.xlayer.tech'], nativeCurrency:{name:'OKB',symbol:'OKB',decimals:18}, blockExplorerUrls:['https://www.oklink.com/xlayer']} ]}); } else throw e; } }
-
-async function pickProvider(mode){
-  // Mobile: luôn dùng WalletConnect và deeplink sang app ví người dùng chọn
-  if (isMobile() || mode==='walletconnect' || ['trust','coinbase','rainbow','bitget','okx','metamask'].includes(mode)) {
-    const pref = mode==='okx'?'okx': mode==='trust'?'trust': mode==='coinbase'?'coinbase': mode==='rainbow'?'rainbow': mode==='bitget'?'bitget':'metamask';
-    return await startWalletConnect(pref);
-  }
-  // Desktop injected
-  const okx = (window.okxwallet?.ethereum || window.okxwallet) || null;
-  const mm  = (window.ethereum && window.ethereum.isMetaMask) ? window.ethereum : null;
-  return okx || mm || window.ethereum || null;
-}
-
-$('connect').addEventListener('click', async ()=>{
+// Wallet connect (simplified)
+$('connect').addEventListener('click',async()=>{
   try{
-    $('status').textContent='🔎 Preparing...';
-    // reserve a window to keep user gesture so Chrome won't block deep link
-    if(isMobile()){ try{ __deepLinkWindow = window.open('', '_blank'); }catch{} }
-
-    const mode = $('walletSelect').value;
-    const injected = await pickProvider(mode);
-    if(!injected){ $('status').textContent='❌ Wallet not found'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } return; }
-    $('status').textContent='🧾 Requesting permission...';
-    let accounts;
-    try { accounts = await injected.request?.({ method:'eth_requestAccounts' }); }
-    catch { accounts = injected.accounts || []; }
-    account = (accounts && accounts[0]) || injected.accounts?.[0];
-    if(!account){ $('status').textContent='❌ No account'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } return; }
-    $('status').textContent='🔁 Switching network...';
-    try{ await ensureXLayer(injected); }catch{ $('status').textContent='⚠️ Switch to X Layer (196) in wallet'; }
-    provider = new ethers.BrowserProvider(injected); signer = await provider.getSigner();
-    $('addr').textContent = account.slice(0,6)+'...'+account.slice(-4);
-    $('status').textContent='✅ Connected';
-    if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} }
-    await updateBalance(); await checkClaimed();
-  }catch(err){ console.error('CONNECT_ERR',err); $('status').textContent='❌ '+(err?.shortMessage||err?.message||err); if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } }
+    if(window.ethereum){
+      await window.ethereum.request({method:'eth_requestAccounts'});
+      const accs=await window.ethereum.request({method:'eth_accounts'});
+      if(accs.length){$('addr').textContent=accs[0];$('status').textContent='✅ Connected';}
+    }else{
+      $('status').textContent='❌ No wallet';
+    }
+  }catch(e){$('status').textContent='❌ '+e.message;}
 });
-
-$('claim').addEventListener('click', async ()=>{
-  try{
-    if(!signer) return alert('Connect wallet first!');
-    const currentScore = window.__banmaoScore || 0;
-    const banmaoNow = currentScore/10; if (banmaoNow < 1) return alert('Need at least 1 BANMAO to claim!');
-    const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
-    const game = new ethers.Contract(GAME_ADDR, GAME_ABI, signer);
-    const tx = await game.claimReward(amount);
-    $('status').textContent='⏳ Tx: '+tx.hash; $('claim').disabled=true; await tx.wait();
-    $('status').textContent='✅ Claim succeeded ('+amount+' BANMAO)'; await updateBalance(); await checkClaimed();
-  }catch(e){ $('status').textContent='❌ '+(e?.shortMessage||e?.reason||e?.message||e); $('claim').disabled=false; }
-});
-
-/*********************** QUICK BUTTONS (mobile) *************************/
-const quick = (pref)=>async(e)=>{ e.preventDefault(); try{ $('status').textContent='🔗 Opening wallet...'; if (isMobile()) { try{ __deepLinkWindow = window.open('', '_blank'); }catch{} } const p=await startWalletConnect(pref); if(!p){ $('status').textContent='❌ WalletConnect not available'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } } }catch(err){ $('status').textContent='❌ '+(err?.message||err); if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } } };
-$('openMM')?.addEventListener('click', quick('metamask'));
-$('openOKX')?.addEventListener('click', quick('okx'));
-$('openTrust')?.addEventListener('click', quick('trust'));
-$('openCBW')?.addEventListener('click', quick('coinbase'));
-$('openRainbow')?.addEventListener('click', quick('rainbow'));
-$('openBitget')?.addEventListener('click', quick('bitget'));
-$('wcQuick')?.addEventListener('click', quick('metamask'));
-
-/*********************** SELF TESTS *************************/
-(function selfTests(){
-  console.log('[SelfTest] has WC lib =', !!(window.WalletConnectProvider));
-  console.log('[SelfTest] has connect btn =', !!document.getElementById('connect'));
-})();
 </script>
 </body>
 </html>
