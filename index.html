@@ -54,51 +54,165 @@
 </div>
 
 <script>
-  // ====== CONFIG ======
+  // ====== ONCHAIN CONFIG ======
+  const TOKEN_ADDR = "0x16d91d1615fC55b76d5F92365BD60C069b46ef78"; // BANMAO token
+  const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143"; // Pool V1
   const MAX_BANMAO = 333;
+  const XLAYER_CHAIN_ID_HEX = "0xC4"; // 196
 
+  const GAME_ABI = [
+    "function claimReward(uint256 score) external",
+    "function claimed(address) view returns (bool)"
+  ];
+  const ERC20_ABI = [
+    "function balanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)"
+  ];
+
+  // ====== UI refs ======
+  const connectBtn = document.getElementById("connect");
+  const claimBtn   = document.getElementById("claim");
+  const walletSelect = document.getElementById("walletSelect");
+  const addrEl = document.getElementById("addr");
+  const balEl  = document.getElementById("balance");
+  const statusEl = document.getElementById("status");
+
+  // ====== Provider state ======
+  let provider, signer, account, tokenDecimals = 18;
+
+  // Simple provider pick
+  function pickProvider(mode="auto"){
+    const okx = window.okxwallet?.ethereum || window.okxwallet || null;
+    const metamask = window.ethereum || null;
+    if (mode==="okx") return okx;
+    if (mode==="metamask") return metamask;
+    return okx || metamask; // auto ưu tiên OKX nếu có
+  }
+
+  async function ensureXLayer(injected){
+    try{
+      const chainId = await injected.request({ method: "eth_chainId" });
+      if (chainId === XLAYER_CHAIN_ID_HEX) return true;
+      // thử switch
+      await injected.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: XLAYER_CHAIN_ID_HEX }]
+      });
+      return true;
+    }catch(e){
+      // nếu chưa có mạng, thêm mới
+      if (e && (e.code === 4902 || /Unrecognized chain/i.test(e.message||""))) {
+        await injected.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: XLAYER_CHAIN_ID_HEX,
+            chainName: "X Layer Mainnet",
+            rpcUrls: ["https://rpc.xlayer.tech"],
+            nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+            blockExplorerUrls: ["https://www.oklink.com/xlayer"]
+          }]
+        });
+        return true;
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  async function updateBalance(){
+    if (!provider || !account) return;
+    try{
+      const token = new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider);
+      tokenDecimals = await token.decimals();
+      const bal = await token.balanceOf(account);
+      balEl.textContent = ethers.formatUnits(bal, tokenDecimals);
+    }catch(e){ balEl.textContent="—"; console.log("bal fail", e); }
+  }
+
+  async function checkClaimed(){
+    if (!provider || !account) return;
+    try{
+      const game = new ethers.Contract(GAME_ADDR, GAME_ABI, provider);
+      const done = await game.claimed(account);
+      if (done){ statusEl.textContent="✅ Already claimed"; claimBtn.disabled=true; }
+      else { statusEl.textContent="Ready to claim"; claimBtn.disabled=false; }
+    }catch(e){ statusEl.textContent="—"; console.log("claimed()? ",e); }
+  }
+
+  // ====== Connect (đơn giản, chắc chắn popup) ======
+  connectBtn.onclick = async () => {
+    try{
+      const injected = pickProvider(walletSelect.value);
+      if(!injected){ alert("❌ Không tìm thấy ví. Cài MetaMask hoặc OKX Wallet!"); return; }
+
+      // yêu cầu quyền + đảm bảo đúng mạng X Layer
+      await injected.request({ method: "eth_requestAccounts" });
+      await ensureXLayer(injected);
+
+      provider = new ethers.BrowserProvider(injected);
+      signer   = await provider.getSigner();
+      account  = await signer.getAddress();
+
+      addrEl.textContent = account.slice(0,6)+'...'+account.slice(-4);
+      statusEl.textContent = "✅ Connected";
+      await updateBalance();
+      await checkClaimed();
+    }catch(err){
+      console.error(err);
+      alert("Connect failed: " + (err?.message || err));
+    }
+  };
+
+  // ====== Claim: 10 điểm = 1 BANMAO, chỉ lấy nguyên, cap 333 ======
+  claimBtn.onclick = async () => {
+    try{
+      if (!signer) return alert("Connect wallet first!");
+      const banmaoNow = score/10;
+
+      if (banmaoNow < 1) return alert("Need at least 1 BANMAO to claim!");
+      const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
+
+      const game = new ethers.Contract(GAME_ADDR, GAME_ABI, signer);
+      const tx = await game.claimReward(amount);
+      statusEl.textContent = "⏳ Tx: "+tx.hash;
+      claimBtn.disabled = true;
+      await tx.wait();
+      statusEl.textContent = "✅ Claim succeeded ("+amount+" BANMAO)";
+      await updateBalance();
+      await checkClaimed();
+    }catch(e){
+      statusEl.textContent = "❌ "+(e?.shortMessage||e?.reason||e?.message||e);
+      claimBtn.disabled = false;
+    }
+  };
+
+  // ====== Mini-game (head-only) ======
+  const MAX_BANMAO_LOCAL = MAX_BANMAO;
   let score = 0;
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
-
   let banana = { x: 720, y: 220, r: 34, vx: 1.1, vy: 0.9 };
 
-  // Vẽ cái đầu mèo
   function drawCatHead(){
-    const x = 200, y = 250, r = 60; // tâm đầu mèo
+    const x = 200, y = 250, r = 60;
     ctx.fillStyle='#ffd84d';
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-
-    // Tai trái
-    ctx.beginPath();
-    ctx.moveTo(x-r*0.6, y-r*0.3);
-    ctx.lineTo(x-r*0.2, y-r*1.0);
-    ctx.lineTo(x-r*0.05, y-r*0.3);
-    ctx.closePath(); ctx.fill();
-
-    // Tai phải
-    ctx.beginPath();
-    ctx.moveTo(x+r*0.6, y-r*0.3);
-    ctx.lineTo(x+r*0.2, y-r*1.0);
-    ctx.lineTo(x+r*0.05, y-r*0.3);
-    ctx.closePath(); ctx.fill();
-
-    // Mắt
+    // ears
+    ctx.beginPath(); ctx.moveTo(x-r*0.6, y-r*0.3); ctx.lineTo(x-r*0.2, y-r*1.0); ctx.lineTo(x-r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x+r*0.6, y-r*0.3); ctx.lineTo(x+r*0.2, y-r*1.0); ctx.lineTo(x+r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
+    // eyes
     ctx.fillStyle='#111';
     ctx.beginPath(); ctx.arc(x-r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(x+r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
-
-    // Mũi
+    // nose
     ctx.beginPath(); ctx.moveTo(x-5,y+10); ctx.lineTo(x+5,y+10); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
-
-    // Miệng
+    // mouth
     ctx.strokeStyle='#111'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(x-5,y+20,7,0,Math.PI); ctx.arc(x+5,y+20,7,0,Math.PI); ctx.stroke();
-
-    // Ria
-    ctx.beginPath(); ctx.moveTo(x-20,y+5); ctx.lineTo(x-45,y); ctx.stroke();
+    // whiskers
+    ctx.beginPath(); ctx.moveTo(x-20,y+5);  ctx.lineTo(x-45,y);    ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x-20,y+12); ctx.lineTo(x-45,y+15); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+20,y+5); ctx.lineTo(x+45,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+20,y+5);  ctx.lineTo(x+45,y);    ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x+20,y+12); ctx.lineTo(x+45,y+15); ctx.stroke();
   }
 
@@ -124,13 +238,13 @@
     requestAnimationFrame(animate);
   } animate();
 
-  // Update progress bar
+  // Progress bar
   function updateProgress(banmaoNow){
     const bar = document.getElementById('progressBar');
     const txt = document.getElementById('progressText');
-    const pct = Math.min(100, (banmaoNow/MAX_BANMAO)*100);
+    const pct = Math.min(100, (banmaoNow/MAX_BANMAO_LOCAL)*100);
     bar.style.width = pct+"%";
-    txt.textContent = banmaoNow.toFixed(3)+" / "+MAX_BANMAO+" BANMAO";
+    txt.textContent = banmaoNow.toFixed(3)+" / "+MAX_BANMAO_LOCAL+" BANMAO";
   }
 
   function hit(mx,my,obj){ const dx=mx-obj.x, dy=my-obj.y; return Math.hypot(dx,dy) <= obj.r + 20; }
@@ -141,8 +255,8 @@
     if (hit(mx,my,banana)){
       const v = 10; // điểm mỗi click
       let banmaoNow = (score+v)/10;
-      if(banmaoNow > MAX_BANMAO){ 
-        document.getElementById('status').textContent = "🚫 Max cap "+MAX_BANMAO+" BANMAO";
+      if(banmaoNow > MAX_BANMAO_LOCAL){ 
+        statusEl.textContent = "🚫 Max cap "+MAX_BANMAO_LOCAL+" BANMAO";
         return;
       }
       score += v;
