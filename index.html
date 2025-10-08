@@ -133,7 +133,7 @@ let __deepLinkWindow = null;
 function openWcDeeplink(uri, pref){
   const L=wcLinks(uri);
   const nav=(href)=>{ try{ if(__deepLinkWindow && !__deepLinkWindow.closed){ __deepLinkWindow.location.href = href; } else { location.href = href; } }catch{ location.href = href; } };
-  const seq = pref==='okx' ? [L.okx, L.okxIntent, L.universal]
+  const seq = pref==='okx' ? [L.okxIntent, L.okx, L.universal]
             : pref==='trust' ? [L.trustHttps, L.trust, L.universal]
             : pref==='coinbase' ? [L.coinbaseHttps, L.coinbase, L.universal]
             : pref==='rainbow' ? [L.rainbowHttps, L.rainbow, L.universal]
@@ -161,6 +161,10 @@ async function ensureWCLib(){
 async function startWalletConnect(preferred){
   const ok = await ensureWCLib();
   if (!ok) { $('status').textContent='❌ WC lib blocked'; return null; }
+  // Prefer X Layer (196) when user selects OKX, others default to 1 and allow 196 as optional
+  const isOKX = preferred==='okx';
+  const chains = isOKX ? [196] : [1];
+  const optionalChains = isOKX ? [] : [196];
   const p = await window.WalletConnectProvider.EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
