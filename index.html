@@ -70,10 +70,9 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const state={ banana:{x:canvas.width*0.72,y:canvas.height*0.6,vx:2.1,vy:1.7,angle:0}, cat:{x:170,y:300} };
 
   function bg(){ ctx.fillStyle='#101010'; ctx.fillRect(0,0,canvas.width,canvas.height); }
-  function drawCat(){ const {x,y}=state.cat; ctx.fillStyle='#ffd84d'; ctx.beginPath(); ctx.arc(x,y,62,0,Math.PI*2); ctx.fill(); // ears
+  function drawCat(){ const {x,y}=state.cat; ctx.fillStyle='#ffd84d'; ctx.beginPath(); ctx.arc(x,y,62,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.moveTo(x-42,y-28); ctx.lineTo(x-12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(x+42,y-28); ctx.lineTo(x+12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill();
-    // face
     ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x-20,y-6,7,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x+20,y-6,7,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.moveTo(x-6,y+8); ctx.lineTo(x+6,y+8); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
     ctx.strokeStyle='#111'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(x-8,y+22,8,0,Math.PI,false); ctx.arc(x+8,y+22,8,0,Math.PI,false); ctx.stroke();
@@ -92,7 +91,7 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   canvas.addEventListener('click', (e)=>{
     const r=canvas.getBoundingClientRect();
     const mx=(e.clientX-r.left)*(canvas.width/r.width);
-    const my=(e.clientY-r.top)*(canvas.height/r.height);
+    const my=(e.clientY-r.top)*(canvas.height/r.top);
     if(hit(mx,my)){
       score=Math.min(MAX,score+10); scoreEl.textContent=score; const earned=score/10;
       earnedEl.textContent=earned.toFixed(3); bar.style.width=Math.min(100,(earned/MAX)*100)+'%'; ptxt.textContent=earned.toFixed(3)+' / 333 BANMAO';
@@ -104,58 +103,39 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 /*********************** WALLETCONNECT (OKX-FOCUSED) *************************/
 const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
-function okxDeepLinks(uri){ const enc=encodeURIComponent(uri); return [
-  `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
-  `okx://wc?uri=${enc}`,
-  `https://walletconnect.com/wc?uri=${enc}`
-]; }
-function launchOKX(uri){ const seq=okxDeepLinks(uri); const nav=(href)=>{ try{ location.href=href; }catch{ location.assign(href); } }; let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step,1200); })(); }
-async function ensureWC(){ if(window.WalletConnectProvider?.EthereumProvider) return true; return new Promise(res=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js'; s.onload=()=>res(!!window.WalletConnectProvider?.EthereumProvider); s.onerror=()=>res(false); document.head.appendChild(s); }); }
-async function connectWithWalletConnectMobile(){
-  const ok=await ensureWC();
-  if(!ok){ $('status').textContent='❌ WalletConnect unavailable'; return null; }
-  const provider=await window.WalletConnectProvider.EthereumProvider.init({
-    projectId:WC_PROJECT_ID,
-    chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
-    showQrModal:false,
-    metadata:{ name:'Banmao Clicker', description:'Connect to claim', url:location.origin, icons:['/favicon.ico'] },
-    methods:["eth_requestAccounts","wallet_switchEthereumChain","wallet_addEthereumChain"],
-    events:["display_uri","accountsChanged","chainChanged","disconnect"]
-  });
-  provider.on?.('display_uri',(uri)=>{ if(isMobile()){ $('status').textContent='🔗 Opening OKX...'; launchOKX(uri); } });
-  await provider.connect();
-  return provider;
+
+async function connectWallet(){
+  try{
+    if(isMobile()){
+      const provider=await window.WalletConnectProvider.EthereumProvider.init({
+        projectId:WC_PROJECT_ID,
+        chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
+        showQrModal:true,
+        metadata:{ name:'Banmao Clicker', description:'Connect to claim', url:location.origin, icons:['/favicon.ico'] }
+      });
+      provider.on('display_uri',(uri)=>{
+        $('status').textContent='🔗 Scan QR with OKX/MetaMask';
+      });
+      await provider.connect();
+      const accounts=await provider.request({method:'eth_requestAccounts'});
+      $('addr').textContent=accounts[0];
+      $('status').textContent='✅ Connected';
+    } else if(window.ethereum){
+      const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
+      $('addr').textContent=accounts[0];
+      $('status').textContent='✅ Connected';
+    } else {
+      $('status').textContent='❌ Wallet not found';
+    }
+  }catch(e){
+    console.error(e);
+    $('status').textContent='❌ '+(e?.message||e);
+  }
 }
 
 /*********************** CONNECT BUTTON *************************/
-$('connect').addEventListener('click', async () => {
-  try{
-    $('status').textContent='🔎 Connecting...';
-    let injected=null;
-    const mode=$('walletSelect').value;
-    if(!isMobile() && window.ethereum && mode!=='walletconnect'){
-      injected=window.ethereum; // desktop
-    } else {
-      // mobile (WC first on chain 1, then we'll switch to 196)
-      injected=await connectWithWalletConnectMobile();
-    }
-    if(!injected){ $('status').textContent='❌ Wallet not found'; return; }
-    // request accounts
-    const accounts = await (injected.request ? injected.request({method:'eth_requestAccounts'}) : injected.enable?.());
-    const account = Array.isArray(accounts) ? accounts[0] : (injected.accounts?.[0]||null);
-    if(!account){ $('status').textContent='❌ No account'; return; }
-    $('addr').textContent=account;
-    // try switch to X Layer 196 (OKX)
-    try{ await injected.request({ method:'wallet_switchEthereumChain', params:[{ chainId:'0xC4' }] }); }
-    catch(e){ if(e?.code===4902){ await injected.request({ method:'wallet_addEthereumChain', params:[{ chainId:'0xC4', chainName:'X Layer Mainnet', rpcUrls:['https://rpc.xlayer.tech'], nativeCurrency:{name:'OKB',symbol:'OKB',decimals:18}, blockExplorerUrls:['https://www.oklink.com/xlayer'] }] }); } }
-    $('status').textContent='✅ Connected';
-  }catch(e){ console.error(e); $('status').textContent='❌ '+(e?.message||e); }
-});
+$('connect').addEventListener('click', connectWallet);
 
-/*********************** SELF-TESTS *************************/
-console.log('[SelfTest] canvas=', !!document.getElementById('game'));
-console.log('[SelfTest] wcLib=', !!window.WalletConnectProvider);
-console.log('[SelfTest] connectBtn=', !!document.getElementById('connect'));
 </script>
 </body>
 </html>
