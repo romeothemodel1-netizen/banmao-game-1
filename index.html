@@ -23,10 +23,6 @@
   .progress-wrap{margin-top:12px;background:#1a1a1a;border-radius:8px;overflow:hidden;border:1px solid #222}
   .progress-bar{height:20px;background:var(--yellow);width:0%;transition:width 0.2s ease}
   .progress-text{text-align:center;font-size:13px;margin-top:4px;color:#ccc}
-  .mobile-banner{display:none;gap:8px;flex-wrap:wrap;margin:10px 0}
-  .linkbtn{background:#222;color:#fff;border:1px solid #333;border-radius:999px;padding:6px 10px;font-size:13px;text-decoration:none}
-  select.pill{background:#fff;color:#000;font-weight:600;}
-  @media(max-width:768px){ .mobile-banner{display:flex;} }
 </style>
 </head>
 <body>
@@ -63,102 +59,84 @@
 </div>
 
 <script>
+/*********************** HELPERS *************************/
 const $ = (id)=>document.getElementById(id);
 const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-// Game
-(function(){
-  const canvas=$('game');const ctx=canvas.getContext('2d');
-  let score=0;const MAX=333;
-  const state={banana:{x:canvas.width*0.7,y:canvas.height*0.5,vx:2,vy:2,angle:0},cat:{x:160,y:300}};
-  function bg(){ctx.fillStyle='#101010';ctx.fillRect(0,0,canvas.width,canvas.height);} 
-  function cat(){const{x,y}=state.cat;ctx.fillStyle='#ffd84d';ctx.beginPath();ctx.arc(x,y,60,0,Math.PI*2);ctx.fill();}
-  function banana(){const b=state.banana;ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.strokeStyle='#f1c40f';ctx.lineWidth=20;ctx.beginPath();ctx.arc(0,0,40,0.25*Math.PI,1.25*Math.PI);ctx.stroke();ctx.restore();}
-  function update(){const b=state.banana;b.x+=b.vx;b.y+=b.vy;b.angle+=0.02;if(b.x<40||b.x>canvas.width-40) b.vx*=-1;if(b.y<40||b.y>canvas.height-40) b.vy*=-1;}
-  function loop(){update();bg();cat();banana();requestAnimationFrame(loop);} loop();
-  canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();const mx=(e.clientX-r.left)*(canvas.width/r.width);const my=(e.clientY-r.top)*(canvas.height/r.height);const dx=mx-state.banana.x,dy=my-state.banana.y;if(Math.hypot(dx,dy)<50){score=Math.min(MAX,score+10);$('score').textContent=score;$('earned').textContent=(score/10).toFixed(3);$('progressBar').style.width=Math.min(100,(score/10)/MAX*100)+'%';$('progressText').textContent=(score/10).toFixed(3)+' / 333 BANMAO';window.__banmaoScore=score;}});
+/*********************** GAME (CAT + BANANA) *************************/
+(function initGame(){
+  const canvas=$('game'); const ctx=canvas.getContext('2d');
+  let score=0; const MAX=333;
+  const state={ banana:{x:canvas.width*0.72,y:canvas.height*0.6,vx:2.1,vy:1.7,angle:0}, cat:{x:170,y:300} };
+
+  function bg(){ ctx.fillStyle='#101010'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+  function drawCat(){ const {x,y}=state.cat; ctx.fillStyle='#ffd84d'; ctx.beginPath(); ctx.arc(x,y,62,0,Math.PI*2); ctx.fill(); // ears
+    ctx.beginPath(); ctx.moveTo(x-42,y-28); ctx.lineTo(x-12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x+42,y-28); ctx.lineTo(x+12,y-82); ctx.lineTo(x,y-40); ctx.closePath(); ctx.fill();
+    // face
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x-20,y-6,7,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(x+20,y-6,7,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x-6,y+8); ctx.lineTo(x+6,y+8); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#111'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(x-8,y+22,8,0,Math.PI,false); ctx.arc(x+8,y+22,8,0,Math.PI,false); ctx.stroke();
+  }
+  function drawBanana(){ const b=state.banana; ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.angle);
+    ctx.beginPath(); ctx.lineWidth=24; ctx.strokeStyle='#f1c40f'; ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.lineWidth=6; ctx.strokeStyle='#d35400'; ctx.arc(0,0,42,0.25*Math.PI,1.25*Math.PI); ctx.stroke();
+    ctx.fillStyle='#d35400'; ctx.beginPath(); ctx.arc(-32,-28,7,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#f39c12'; ctx.beginPath(); ctx.arc(36,28,9,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  function update(){ const b=state.banana; b.x+=b.vx; b.y+=b.vy; b.angle+=0.02; if(b.x<48||b.x>canvas.width-48) b.vx*=-1; if(b.y<48||b.y>canvas.height-48) b.vy*=-1; }
+  function hit(mx,my){ const dx=mx-state.banana.x, dy=my-state.banana.y; return Math.hypot(dx,dy)<56; }
+  function loop(){ update(); bg(); drawCat(); drawBanana(); requestAnimationFrame(loop); } loop();
+
+  const scoreEl=$('score'), earnedEl=$('earned'), bar=$('progressBar'), ptxt=$('progressText');
+  canvas.addEventListener('click', (e)=>{
+    const r=canvas.getBoundingClientRect();
+    const mx=(e.clientX-r.left)*(canvas.width/r.width);
+    const my=(e.clientY-r.top)*(canvas.height/r.height);
+    if(hit(mx,my)){
+      score=Math.min(MAX,score+10); scoreEl.textContent=score; const earned=score/10;
+      earnedEl.textContent=earned.toFixed(3); bar.style.width=Math.min(100,(earned/MAX)*100)+'%'; ptxt.textContent=earned.toFixed(3)+' / 333 BANMAO';
+      state.banana.vx*=1.02; state.banana.vy*=1.02; window.__banmaoScore=score;
+    }
+  });
+  window.__banmaoScore=score;
 })();
 
-// Wallet connect (simplified)
-$('connect').addEventListener('click',async()=>{
-  try{
-    if(window.ethereum){
-      await window.ethereum.request({method:'eth_requestAccounts'});
-      const accs=await window.ethereum.request({method:'eth_accounts'});
-      if(accs.length){$('addr').textContent=accs[0];$('status').textContent='✅ Connected';}
-    }else{
-      $('status').textContent='❌ No wallet';
-    }
-  }catch(e){$('status').textContent='❌ '+e.message;}
-});
-// ===== WalletConnect helpers for mobile (OKX focus) =====
-const WC_PROJECT_ID = 'cfda431a5eccf423674b212df85d492c';
-function okxDeepLinks(uri){
-  const enc = encodeURIComponent(uri);
-  return [
-    `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
-    `okx://wc?uri=${enc}`,
-    `https://walletconnect.com/wc?uri=${enc}`
-  ];
-}
-let __dlWin = null;
-function launchOKX(uri){
-  const seq = okxDeepLinks(uri);
-  const nav = (href)=>{
-    try{ if(__dlWin && !__dlWin.closed){ __dlWin.location.href = href; } else { location.href = href; } }
-    catch{ location.href = href; }
-  };
-  let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step, 900); })();
-}
-async function ensureWC(){
-  if (window.WalletConnectProvider?.EthereumProvider) return true;
-  return new Promise(res=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js';
-    s.onload=()=>res(!!window.WalletConnectProvider?.EthereumProvider);
-    s.onerror=()=>res(false);
-    document.head.appendChild(s);
-  });
-}
-async function connectWithWalletConnectOKX(){
-  const ok = await ensureWC();
-  if(!ok){ $('status').textContent='❌ WalletConnect unavailable'; return null; }
-  const provider = await window.WalletConnectProvider.EthereumProvider.init({
-    projectId: WC_PROJECT_ID,
-    chains:[196], // X Layer on OKX
-    rpcMap:{196:'https://rpc.xlayer.tech'},
-    showQrModal: !isMobile(),
-    metadata:{ name:'Banmao Clicker', description:'Connect to claim', url: location.origin, icons:['/favicon.ico'] },
-    methods:["eth_requestAccounts","wallet_switchEthereumChain","wallet_addEthereumChain"],
-    events:["display_uri","accountsChanged","chainChanged","disconnect"]
-  });
-  provider.on?.('display_uri', (uri)=>{ if(isMobile()){ $('status').textContent='🔗 Opening OKX...'; launchOKX(uri); } });
-  await provider.connect();
-  return provider;
-}
+/*********************** WALLETCONNECT (OKX-FOCUSED) *************************/
+const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
+function okxDeepLinks(uri){ const enc=encodeURIComponent(uri); return [
+  `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
+  `okx://wc?uri=${enc}`,
+  `https://walletconnect.com/wc?uri=${enc}`
+]; }
+function launchOKX(uri){ const seq=okxDeepLinks(uri); const nav=(href)=>{ try{ location.href=href; }catch{ location.assign(href); } }; let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step,1200); })(); }
+async function ensureWC(){ if(window.WalletConnectProvider?.EthereumProvider) return true; return new Promise(res=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js'; s.onload=()=>res(!!window.WalletConnectProvider?.EthereumProvider); s.onerror=()=>res(false); document.head.appendChild(s); }); }
+async function connectWithWalletConnectOKX(){ const ok=await ensureWC(); if(!ok){ $('status').textContent='❌ WalletConnect unavailable'; return null; } const provider=await window.WalletConnectProvider.EthereumProvider.init({ projectId:WC_PROJECT_ID, chains:[196], rpcMap:{196:'https://rpc.xlayer.tech'}, showQrModal:false, metadata:{ name:'Banmao Clicker', description:'Connect to claim', url:location.origin, icons:['/favicon.ico'] }, methods:["eth_requestAccounts","wallet_switchEthereumChain","wallet_addEthereumChain"], events:["display_uri","accountsChanged","chainChanged","disconnect"] }); provider.on?.('display_uri',(uri)=>{ if(isMobile()){ $('status').textContent='🔗 Opening OKX...'; launchOKX(uri); } }); await provider.connect(); return provider; }
 
-// ===== Connect button (injected on desktop, WC on mobile/OKX) =====
-$('connect').addEventListener('click', async()=>{
+/*********************** CONNECT BUTTON *************************/
+$('connect').addEventListener('click', async () => {
   try{
     $('status').textContent='🔎 Connecting...';
     let injected=null;
-    if(!isMobile() && window.ethereum){
-      injected = window.ethereum; // desktop MetaMask/OKX extension
+    const mode=$('walletSelect').value;
+    if(!isMobile() && window.ethereum && mode!=='walletconnect'){
+      injected=window.ethereum; // desktop
     } else {
-      try{ __dlWin = window.open('', '_blank'); }catch{}
-      injected = await connectWithWalletConnectOKX();
+      // mobile (or explicit walletconnect): use WC→deeplink OKX (chain 196)
+      injected=await connectWithWalletConnectOKX();
     }
-    if(!injected){ $('status').textContent='❌ Wallet not found'; try{__dlWin?.close();}catch{} return; }
-    // request accounts
+    if(!injected){ $('status').textContent='❌ Wallet not found'; return; }
     const accounts = await (injected.request ? injected.request({method:'eth_requestAccounts'}) : injected.enable?.());
-    const account = (Array.isArray(accounts)?accounts[0]: (injected.accounts?.[0]||null));
-    if(!account){ $('status').textContent='❌ No account'; try{__dlWin?.close();}catch{} return; }
-    // show address
-    $('addr').textContent = account;
-    $('status').textContent = '✅ Connected';
-    try{__dlWin?.close();}catch{}
-  }catch(e){ $('status').textContent='❌ '+(e?.message||e); try{__dlWin?.close();}catch{} }
+    const account = Array.isArray(accounts) ? accounts[0] : (injected.accounts?.[0]||null);
+    if(!account){ $('status').textContent='❌ No account'; return; }
+    $('addr').textContent=account; $('status').textContent='✅ Connected';
+  }catch(e){ $('status').textContent='❌ '+(e?.message||e); }
 });
+
+/*********************** SELF-TESTS *************************/
+console.log('[SelfTest] canvas=', !!document.getElementById('game'));
+console.log('[SelfTest] wcLib=', !!window.WalletConnectProvider);
+console.log('[SelfTest] connectBtn=', !!document.getElementById('connect'));
 </script>
 </body>
 </html>
