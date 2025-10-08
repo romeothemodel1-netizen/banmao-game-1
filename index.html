@@ -7,8 +7,6 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
-<!-- WalletConnect v2 (UMD) -->
-<script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js"></script>
 
 <style>
   :root { --yellow:#ffd84d; }
@@ -44,17 +42,6 @@
       <div class="pill">Status: <span id="status">Ready</span></div>
     </div>
 
-    <div id="mobileFallback" style="display:none;gap:8px;margin:8px 0;flex-wrap:wrap">
-      <span class="pill" style="opacity:.8">Lib lỗi? Mở bằng ví:</span>
-      <a class="pill" id="openOkx" href="#">Open in OKX</a>
-      <a class="pill" id="openMM" href="#">Open in MetaMask</a>
-    </div>
-
-    <div id="wcHelp" style="display:none;gap:8px;margin:6px 0;flex-wrap:wrap">
-      <span class="pill" style="opacity:.8">Không thấy lời mời trong ví?</span>
-      <a class="pill" id="openWalletAgain" href="#">Mở lại ví</a>
-    </div>
-
     <canvas id="game" width="900" height="460" style="margin-top:12px"></canvas>
 
     <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
@@ -65,7 +52,6 @@
 <script>
 /*********************** HELPERS *************************/
 const $ = (id)=>document.getElementById(id);
-const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 /*********************** GAME *************************/
 (function initGame(){
@@ -107,91 +93,9 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   window.__banmaoScore=score;
 })();
 
-/* ********************* WALLETCONNECT *************************/
-const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
-let __lastWCURI = null;
-
-// Prefer OKX deep link on Android; fall back to MetaMask and universal
-function openWalletDeepLink(uri){
-  const enc = encodeURIComponent(uri);
-  const seq = [
-    `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
-    `okx://wc?uri=${enc}`,
-    `metamask://wc?uri=${enc}`,
-    `https://metamask.app.link/wc?uri=${enc}`,
-    `https://walletconnect.com/wc?uri=${enc}`
-  ];
-  let i=0; (function step(){ if(i>=seq.length) return; location.href = seq[i++]; setTimeout(step, 1100); })();
-}
-
-function getEP(){
-  const g=window;
-  return (
-    g.WalletConnectProvider?.EthereumProvider ||
-    g.WalletConnect?.EthereumProvider ||
-    g.WalletConnectEthereumProvider ||
-    null
-  );
-}
-
-async function ensureWC(){
-  const OK = () => !!getEP();
-  if (OK()) return true;
-  const urls = [
-    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
-    'https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
-    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2/dist/umd/index.min.js'
-  ];
-  for (const src of urls){
-    await new Promise((resolve)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=resolve; s.onerror=resolve; document.head.appendChild(s); });
-    if (OK()) return true;
-  }
-  return OK();
-}
-
-function showMobileFallback(){
-  const fb=document.getElementById('mobileFallback');
-  if(!fb) return; fb.style.display='flex';
-  const dapp=encodeURIComponent(location.href);
-  document.getElementById('openOkx').setAttribute('href',`okx://wallet/dapp?url=${dapp}`);
-  document.getElementById('openMM').setAttribute('href',`https://metamask.app.link/dapp/${location.host}${location.pathname}`);
-  const h=document.getElementById('wcHelp'); if(h) h.style.display='flex';
-  const btn=document.getElementById('openWalletAgain'); if(btn){ btn.onclick=(e)=>{ e.preventDefault(); if(__lastWCURI) openWalletDeepLink(__lastWCURI); else tryOpenWalletDapp(); }; }
-}
-
-// Auto open DApp inside wallet if WC library cannot be loaded on mobile networks
-function tryOpenWalletDapp(){
-  const dapp = encodeURIComponent(location.href);
-  const seq = [
-    `intent://wallet/dapp?url=${dapp}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fmetamask.app.link%2Fdapp%2F${location.host}${location.pathname};end`,
-    `okx://wallet/dapp?url=${dapp}`,
-    `https://metamask.app.link/dapp/${location.host}${location.pathname}`
-  ];
-  let i=0; (function step(){ if(i>=seq.length) return; location.href=seq[i++]; setTimeout(step,1100); })();
-}
-
+/*********************** CONNECT *************************/
 async function connectWallet(){
   try{
-    if(isMobile()){
-      $('status').textContent='⏳ Loading WC...';
-      const ok = await ensureWC();
-      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded → opening wallet DApp'; showMobileFallback(); tryOpenWalletDapp(); return; }
-      const EP = getEP();
-      const provider = await EP.init({
-        projectId: WC_PROJECT_ID,
-        chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
-        showQrModal:false,
-        metadata:{ name:'Banmao Clicker', description:'Connect', url:location.origin, icons:['/favicon.ico'] }
-      });
-      provider.on?.('display_uri', (uri)=>{ $('status').textContent='🔗 Opening wallet...'; __lastWCURI = uri; openWalletDeepLink(uri); });
-      // Start a watchdog: if user doesn't approve in 12s, show a helper button to re-open the wallet
-let approved=false; const watchdog=setTimeout(()=>{ if(!approved){ $('status').textContent='ℹ️ Hãy duyệt kết nối trong ví. Nếu chưa hiện, bấm “Mở lại ví”.'; const h=document.getElementById('wcHelp'); if(h) h.style.display='flex'; const btn=document.getElementById('openWalletAgain'); if(btn){ btn.onclick=(e)=>{ e.preventDefault(); if(__lastWCURI) openWalletDeepLink(__lastWCURI); }; } } }, 12000);
-await provider.connect(); approved=true; clearTimeout(watchdog);
-      const accounts = await provider.request({method:'eth_requestAccounts'});
-      $('addr').textContent = accounts?.[0] || '—';
-      $('status').textContent = '✅ Connected';
-      return;
-    }
     if(window.ethereum){
       const accounts = await window.ethereum.request({method:'eth_requestAccounts'});
       $('addr').textContent=accounts[0]; $('status').textContent='✅ Connected';
@@ -201,9 +105,7 @@ await provider.connect(); approved=true; clearTimeout(watchdog);
   }catch(e){ console.error(e); $('status').textContent='❌ '+(e?.message||e); }
 }
 
-/*********************** CONNECT BUTTON *************************/
 $('connect').addEventListener('click', connectWallet);
-
 </script>
 </body>
 </html>
