@@ -74,7 +74,7 @@
   const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143";
   const MAX_BANMAO = 333;
   const XLAYER_CHAIN_ID_HEX = "0xC4"; // 196
-  const WC_PROJECT_ID = "cfda431a5eccf423674b212df85d492c"; // <- WalletConnect Project ID của bạn
+  const WC_PROJECT_ID = "cfda431a5eccf423674b212df85d492c"; // WalletConnect Project ID
 
   const GAME_ABI = [
     "function claimReward(uint256 score) external",
@@ -94,21 +94,45 @@
   const balEl    = document.getElementById("balance");
   const statusEl = document.getElementById("status");
 
-  // ====== Helpers ======
+  // ====== Utils ======
   function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
 
-  // WC khởi tạo trên chain 1, khai báo 196 là optional → ổn định hơn trên mobile
+  // Ưu tiên deeplink ví nào khi dùng WalletConnect trên mobile
+  const PREFERRED_WALLET = "metamask"; // "metamask" | "okx" | "universal"
+
+  function openWalletDeepLink(uri){
+    const enc = encodeURIComponent(uri);
+    const links = {
+      metamaskHttps: `https://metamask.app.link/wc?uri=${enc}`,
+      metamask:      `metamask://wc?uri=${enc}`,
+      okx:           `okx://wc?uri=${enc}`,
+      universal:     `https://walletconnect.com/wc?uri=${enc}`
+    };
+    if (PREFERRED_WALLET === "metamask") {
+      window.location.href = links.metamaskHttps;        // hầu hết iOS/Android
+      setTimeout(()=> window.location.href = links.metamask, 900); // fallback native scheme
+      setTimeout(()=> window.location.href = links.universal, 1800);
+    } else if (PREFERRED_WALLET === "okx") {
+      window.location.href = links.okx;
+      setTimeout(()=> window.location.href = links.universal, 1200);
+    } else {
+      window.location.href = links.universal;
+    }
+  }
+
+  // ====== WalletConnect: init trên chain 1, lắng nghe display_uri để auto-deeplink mobile
   async function getWalletConnectProvider() {
     if (!window.WalletConnectProvider) {
       alert("WalletConnect lib chưa tải. Refresh trang.");
       return null;
     }
+
     const provider = await window.WalletConnectProvider.EthereumProvider.init({
       projectId: WC_PROJECT_ID,
       chains: [1],                 // mở phiên trên Ethereum
       optionalChains: [196],       // X Layer là optional, add/switch sau
       rpcMap: { 196: "https://rpc.xlayer.tech" },
-      showQrModal: true,
+      showQrModal: true,           // desktop: hiện QR; mobile: ta sẽ deeplink qua display_uri
       metadata: {
         name: "Banmao Clicker",
         description: "Claim BANMAO từ game clicker",
@@ -122,7 +146,12 @@
       events: ["chainChanged","accountsChanged","disconnect"]
     });
 
-    await provider.connect(); // desktop: QR; mobile: list app ví
+    // 🔑 Khi WalletConnect phát URI, nếu là mobile → tự deeplink sang ví
+    provider.on?.("display_uri", (uri) => {
+      if (isMobile()) openWalletDeepLink(uri);
+    });
+
+    await provider.connect();
 
     // Đợi accounts nếu ví chưa trả ngay
     const accs = (provider.accounts && provider.accounts.length)
@@ -175,15 +204,16 @@
 
   wcQuickBtn.onclick = (e)=>{ e.preventDefault(); walletSelect.value = "walletconnect"; connectBtn.click(); };
 
-  // ====== Connect (desktop/mobile + WC) ======
+  // ====== Connect (desktop/mobile + WalletConnect) ======
   connectBtn.onclick = async () => {
     try{
       statusEl.textContent = "🔎 Tìm ví...";
       const mode = walletSelect.value;
 
+      // Lấy provider (injected hoặc WalletConnect)
       const injected = await pickInjected(mode);
       if (!injected){
-        if (isMobile()) alert("Không thấy ví. Dùng Open in MetaMask/OKX ở trên hoặc chọn WalletConnect.");
+        if (isMobile()) alert("Không thấy ví. Dùng Open in MetaMask/OKX hoặc chọn WalletConnect.");
         else alert("Không thấy ví (MetaMask/OKX). Cài extension rồi refresh.");
         statusEl.textContent="No wallet";
         return;
@@ -203,7 +233,7 @@
       try {
         await ensureXLayer(injected);
       } catch {
-        statusEl.textContent = "⚠️ Hãy chuyển sang X Layer (196) trong ví, rồi quay lại.";
+        statusEl.textContent = "⚠️ Hãy chuyển sang X Layer (196) trong ví rồi quay lại.";
       }
 
       await waitForEthers();
