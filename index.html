@@ -1,473 +1,377 @@
-<!DOCTYPE html>
-<html lang="vi">
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
-  <title>Banmao X — 5 Lane Racing (Playable)</title>
-  <!-- Keep CSS in one well-formed tag; start with a comment to avoid edge parsers choking on :root -->
-  <style type="text/css">
-    /* Theme */
-    :root{--accent:#f1c40f;--primary:#3498db;--danger:#e74c3c}
-    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    html,body{height:100%}
-    body{margin:0;background:#1b1f2a;color:#ecf0f1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
-    .game{width:min(560px,100%);aspect-ratio:9/16;display:flex;flex-direction:column;gap:8px;background:#0d1117;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.5);padding:10px;border:1px solid rgba(255,255,255,.07)}
-    .hdr{border-bottom:1px solid rgba(52,152,219,.5);padding-bottom:6px}
-    .hdr h1{margin:0;text-align:center;font-weight:900;letter-spacing:.12em;font-size:clamp(16px,3.5vw,22px)}
-    .stats{display:flex;gap:6px}
-    .stat{flex:1;text-align:center;background:rgba(255,255,255,.08);border-radius:8px;padding:6px}
-    .stat .t{opacity:.8;font-size:10px;letter-spacing:.08em}
-    .stat .v{font-weight:900;color:var(--accent)}
-    .stage{position:relative;flex:1;border-radius:10px;overflow:hidden;border:1.5px solid rgba(52,152,219,.6);background:#2f3a4a}
-    canvas{display:block;width:100%;height:100%;touch-action:none;background:#34495e}
-    .pwr{position:absolute;right:10px;top:10px;background:rgba(0,0,0,.6);color:#fff;padding:6px 10px;border-radius:999px;display:none;gap:6px;align-items:center;font-weight:700}
-    .row{display:flex;gap:6px}
-    .btn{flex:1;border:0;border-radius:10px;padding:10px 12px;font-weight:900;cursor:pointer}
-    .ok{background:#2ecc71;color:#fff}.pri{background:#3498db;color:#fff}.dan{background:#e74c3c;color:#fff}
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
-    .card{width:min(360px,92vw);background:#0009;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;text-align:center}
-    .card h2{margin:0 0 8px;color:var(--danger)}
-    .toast{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.7);color:#ffb000;padding:6px 10px;border-radius:999px;font-weight:800;display:none}
-    .splash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:20;flex-direction:column;gap:20px}
-    .splash img{width:50%;max-width:240px}
-    .splash h2{color:#fff;margin:0;font-size:18px;text-align:center}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Banmao Clicker – Pool V1</title>
+
+<!-- Ethers v6 từ cdnjs + fallback sang unpkg -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"
+        onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/ethers@6.13.2/dist/ethers.umd.min.js';document.head.appendChild(s);}())"></script>
+<!-- WalletConnect (UMD) -->
+<script src="https://unpkg.com/@walletconnect/ethereum-provider/dist/umd/index.min.js"></script>
+
+<style>
+  :root { --yellow:#ffd84d; }
+  html,body{margin:0;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:20px}
+  .card{background:#111;border:1px solid #222;border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin-bottom:14px}
+  .row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .pill{background:#1a1a1a;border:1px solid #222;padding:8px 12px;border-radius:999px}
+  .btn{background:var(--yellow);color:#111;border:0;padding:10px 16px;border-radius:12px;font-weight:800;cursor:pointer}
+  h1{margin:0 0 10px 0;font-size:22px}
+  canvas{width:100%;height:auto;background:linear-gradient(180deg,#161616 0%,#0f0f0f 100%);border-radius:12px;border:1px solid #222;display:block}
+  .progress-wrap{margin-top:12px;background:#1a1a1a;border-radius:8px;overflow:hidden;border:1px solid #222}
+  .progress-bar{height:20px;background:var(--yellow);width:0%;transition:width 0.2s ease}
+  .progress-text{text-align:center;font-size:13px;margin-top:4px;color:#ccc}
+  .mobile-banner{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .linkbtn{background:#222;color:#fff;border:1px solid #333;border-radius:999px;padding:6px 10px;font-size:13px;text-decoration:none}
+</style>
 </head>
 <body>
-  <div class="game">
-    <div class="hdr">
-      <h1>BANMAO X</h1>
-      <div class="stats">
-        <div class="stat"><div class="t">SCORE</div><div class="v" id="s">0</div></div>
-        <div class="stat"><div class="t">OVERTAKES</div><div class="v" id="ot">0</div></div>
-        <div class="stat"><div class="t">COMBO</div><div class="v" id="cb">1×</div></div>
-      </div>
-    </div>
-    <div class="stage">
-      <canvas id="cv" aria-label="Racing canvas" role="img"></canvas>
-      <div class="pwr" id="pwr"><span id="pico">⚡</span><span id="pt">0s</span></div>
-      <div class="toast" id="toast">COMBO x1</div>
-      <div class="splash" id="splash">
-        <img src="https://banmao-proxy-clean.vercel.app/gm4.png" alt="Banmao car" />
-        <h2>Nhấn START để bắt đầu chơi</h2>
-      </div>
-    </div>
+<div class="wrap">
+  <div class="card">
     <div class="row">
-      <button class="btn ok" id="start">START</button>
-      <button class="btn pri" id="pause">PAUSE</button>
-      <button class="btn dan" id="restart">RESTART</button>
-    </div>
-  </div>
-
-  <div class="overlay" id="over">
-    <div class="card">
-      <h2>GAME OVER!</h2>
-      <div style="display:flex;gap:10px;justify-content:space-between;margin:10px 0">
-        <div class="stat"><div class="t">SCORE</div><div class="v" id="fs">0</div></div>
-        <div class="stat"><div class="t">OVERTAKES</div><div class="v" id="fo">0</div></div>
-        <div class="stat"><div class="t">MAX COMBO</div><div class="v" id="fc">1×</div></div>
+      <h1>Banmao Clicker – Pool V1</h1>
+      <div>
+        <select id="walletSelect" class="pill">
+          <option value="auto">Auto (OKX / MetaMask)</option>
+          <option value="okx">Force OKX Wallet</option>
+          <option value="metamask">Force MetaMask</option>
+          <option value="walletconnect">WalletConnect (QR / Mobile)</option>
+        </select>
+        <button id="connect" class="btn">Connect Wallet</button>
+        <button id="claim" class="btn">Claim BANMAO</button>
       </div>
-      <button class="btn ok" id="again" style="width:100%;margin-bottom:8px">PLAY AGAIN</button>
-      <button class="btn pri" id="tw" style="width:100%">SHARE ON TWITTER</button>
     </div>
+
+    <!-- Mobile deeplinks -->
+    <div class="mobile-banner">
+      <span style="opacity:.8">On mobile?</span>
+      <a class="linkbtn" href="https://metamask.app.link/dapp/banmao-game.vercel.app">Open in MetaMask</a>
+      <a class="linkbtn" href="okx://wallet/dapp?url=https%3A%2F%2Fbanmao-game.vercel.app">Open in OKX</a>
+      <a class="linkbtn" href="#" id="wcQuick">Use WalletConnect</a>
+    </div>
+
+    <div class="row" style="margin-top:-6px;gap:10px">
+      <div class="pill">Score: <b id="score">0</b></div>
+      <div class="pill">BANMAO earned: <b id="earned">0</b></div>
+      <div class="pill">Wallet: <span id="addr">not connected</span></div>
+      <div class="pill">Balance: <b id="balance">0</b></div>
+      <div class="pill">Status: <span id="status">Ready</span></div>
+    </div>
+
+    <canvas id="game" width="900" height="460" style="margin-top:12px"></canvas>
+
+    <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
+    <div id="progressText" class="progress-text">0 / 333 BANMAO</div>
   </div>
+</div>
 
-<script type="text/javascript">
-(function(){
-  // ====== DOM & CTX ======
-  var cv = document.getElementById('cv');
-  var ctx = cv.getContext('2d');
-  var stage = cv.parentElement;
-  var splash = document.getElementById('splash');
-  var over = document.getElementById('over');
-  var $ = function(id){ return document.getElementById(id); };
+<script>
+  // ====== ONCHAIN CONFIG ======
+  const TOKEN_ADDR = "0x16d91d1615fC55b76d5F92365BD60C069b46ef78";
+  const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143";
+  const MAX_BANMAO = 333;
+  const XLAYER_CHAIN_ID_HEX = "0xC4"; // 196
+  const WC_PROJECT_ID = "cfda431a5eccf423674b212df85d492c"; // WalletConnect Project ID
 
-  // ====== IMAGE HELPERS (fix InvalidStateError) ======
-  function makeImg(srcs){
-    var img = new Image(); img.crossOrigin='anonymous';
-    var i = 0; var ready=false; var failed=false;
-    function tryNext(){ if(i>=srcs.length){ failed=true; return; } img.src = srcs[i++]; }
-    img.onload = function(){ ready = (img.naturalWidth>0 && img.naturalHeight>0); };
-    img.onerror = tryNext; // thử nguồn tiếp theo nếu lỗi
-    tryNext();
-    return {img:img, isReady:function(){ return ready && img.complete && img.naturalWidth>0; }, failed:function(){return failed;}};
-  }
-  function canDraw(image){ return !!(image && image.complete && image.naturalWidth>0 && image.naturalHeight>0); }
-  function drawImageSafe(image,x,y,w,h){
-    if(!canDraw(image)) return false;
-    try{ ctx.drawImage(image,x,y,w,h); return true; }catch(e){ /* tránh crash nếu state=broken */ return false; }
-  }
+  const GAME_ABI = [
+    "function claimReward(uint256 score) external",
+    "function claimed(address) view returns (bool)"
+  ];
+  const ERC20_ABI = [
+    "function balanceOf(address) view returns (uint256)",
+    "function decimals() view returns (uint8)"
+  ];
 
-  // ====== ASSETS ======
-  var carA = makeImg(['https://banmao-proxy-clean.vercel.app/gm4.png']);
-  var obs1A = makeImg(['https://banmao-proxy-clean.vercel.app/gm2.png']);
-  var obs2A = makeImg(['https://banmao-proxy-clean.vercel.app/gm3.png']);
-  var banA  = makeImg(['https://banmao-proxy-clean.vercel.app/bm9.png']);
-  // logo OKX: có thể bị chặn, chuẩn bị fallback vẽ vector
-  var okxA  = makeImg([
-    'https://seeklogo.com/images/O/okx-logo-1E0A4DFF74-seeklogo.com.png',
-    'https://upload.wikimedia.org/wikipedia/commons/7/75/OKX_Logo.png'
-  ]);
-  var imgCar = carA.img, imgObs1 = obs1A.img, imgObs2 = obs2A.img, imgBan = banA.img, imgOkx = okxA.img;
+  // ====== UI refs ======
+  const walletSelect = document.getElementById("walletSelect");
+  const connectBtn = document.getElementById("connect");
+  const claimBtn   = document.getElementById("claim");
+  const wcQuickBtn = document.getElementById("wcQuick");
+  const addrEl   = document.getElementById("addr");
+  const balEl    = document.getElementById("balance");
+  const statusEl = document.getElementById("status");
 
-  // ====== CANVAS FIT (HiDPI) ======
-  function fit(){
-    var dpr = window.devicePixelRatio||1;
-    var w = stage.clientWidth, h = stage.clientHeight;
-    cv.width = Math.max(1, Math.floor(w*dpr));
-    cv.height = Math.max(1, Math.floor(h*dpr));
-    cv.style.width = w+'px';
-    cv.style.height = h+'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-  }
-  if('ResizeObserver' in window){ new ResizeObserver(fit).observe(stage); } else window.addEventListener('resize',fit);
-  fit();
+  // ====== Utils ======
+  function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
 
-  // ====== STATE ======
-  var LANES = 5;
-  var laneW = function(){ return stage.clientWidth / LANES; };
-  var state = {
-    running:false, paused:false, last:0,
-    score:0, overtakes:0, combo:0, maxCombo:0,
-    level:1, speed:3, maxSpeed:8, accel0:0.12, elapsed:0,
-    lane:2,
-    cars:[], bananas:[], gems:[],
-    spawnCar:0, spawnBan:0, spawnGem:0,
-    rateCar:2.0, // giảm 50% tần suất xe so với mặc định 1.0
-    rateBan:3.0, rateGem:4.0,
-    hit:false, hitTimer:0, flash:0, shake:0,
-    fx:[],
-    seeded:false, // đảm bảo có vật thể ngay khi START
-    frames:0      // đếm số frame để test
-  };
+  // Ưu tiên deeplink ví nào khi dùng WalletConnect trên mobile
+  const PREFERRED_WALLET = "metamask"; // "metamask" | "okx" | "universal"
 
-  function ui(){ $('s').textContent = (state.score|0); $('ot').textContent = (state.overtakes|0); $('cb').textContent = (Math.max(1,state.combo))+'×'; }
-
-  // ====== PLAYER ======
-  var player = {
-    w:function(){ return laneW()*0.6; },
-    h:function(){ return laneW()*0.6*1.4; },
-    y:function(){ return stage.clientHeight - laneW()*0.6*1.6; }
-  };
-  function pRect(){ return { x: state.lane*laneW() + (laneW()-player.w())/2, y: player.y(), w: player.w(), h: player.h() }; }
-
-  // ====== INPUT ======
-  var touchStartX=0;
-  cv.addEventListener('pointerdown',function(e){ touchStartX = e.clientX; if(cv.setPointerCapture){ cv.setPointerCapture(e.pointerId); } ensureAudio(); });
-  cv.addEventListener('pointerup',function(e){ var dx = e.clientX - touchStartX; if(Math.abs(dx) < 24){ var mid = stage.getBoundingClientRect().left + stage.clientWidth/2; if(e.clientX < mid) left(); else right(); } else { if(dx>0) right(); else left(); } });
-  document.addEventListener('keydown',function(e){ if(!state.running||state.paused) return; if(e.key==='ArrowLeft') left(); else if(e.key==='ArrowRight') right(); else if(e.key==='Escape') togglePause(); });
-  function left(){ state.lane = Math.max(0, state.lane-1); }
-  function right(){ state.lane = Math.min(LANES-1, state.lane+1); }
-
-  // ====== BUTTONS ======
-  $('start').onclick = function(){ ensureAudio(); start(); };
-  $('start').addEventListener('click', function(){ ensureAudio(); start(); });
-  $('again').onclick = function(){ ensureAudio(); start(); };
-  $('restart').onclick = function(){ cancelAnimationFrame(loopId); state.running=false; ensureAudio(); start(); };
-  $('pause').onclick = togglePause;
-  $('tw').onclick = function(){ var t = 'Banmao X! I scored '+(state.score|0); var u='http://banmao.meme'; var url = 'https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u); window.open(url,'_blank','width=560,height=420'); };
-
-  function togglePause(){ if(!state.running) return; state.paused=!state.paused; $('pause').textContent = state.paused?'RESUME':'PAUSE'; if(!state.paused){ state.last=performance.now(); cancelAnimationFrame(loopId); state.frames++; loopId=requestAnimationFrame(loop); } }
-  function reset(){
-    state.score=0; state.overtakes=0; state.combo=0; state.maxCombo=0;
-    state.level=1; state.speed=3; state.elapsed=0; state.lane=2;
-    state.cars.length=0; state.bananas.length=0; state.gems.length=0;
-    state.spawnCar=0; state.spawnBan=0; state.spawnGem=0;
-    state.hit=false; state.hitTimer=0; state.flash=0; state.shake=0; state.fx.length=0;
-    state.seeded=false; state.frames=0; ui();
-  }
-  function start(){
-    splash.style.display='none'; over.style.display='none';
-    reset(); seedInitial();
-    state.running=true; state.paused=false; $('pause').textContent='PAUSE';
-    state.last=performance.now();
-    cancelAnimationFrame(loopId);
-    // gọi loop ngay lập tức + rAF để tránh môi trường chặn khung đầu
-    loop(state.last);
-    state.frames++;
-    loopId=requestAnimationFrame(loop);
-  }
-
-  // ====== DRAW ======
-  function drawOKXVector(x,y,w,h,alpha){
-    // Vẽ chữ OKX theo dạng lưới ô vuông (gần giống logo bạn gửi)
-    // - "O": hình vuông đặc có lỗ trống giữa
-    // - "K": ma trận 3x3 các ô tạo thành chữ K khối
-    // - "X": ma trận 3x3 các ô tạo thành chữ X
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    var totalW = w, totalH = h;
-    var unit = Math.min(totalH*0.9, totalW*0.9); // giới hạn bên trong
-    var scale = unit/3; // mỗi ô là scale x scale
-    var gap = scale*0.25; // khoảng cách giữa các ô trong cùng một chữ
-
-    // Bố cục: 3 chữ, có khoảng cách giữa chữ
-    var letterGap = scale*0.9;
-    var oW = scale*3, kW = scale*3, xW = scale*3;
-    var fullW = oW + letterGap + kW + letterGap + xW;
-    var startX = x + (w - fullW)/2;
-    var baseY  = y + (h - scale*3)/2;
-
-    // Helper: vẽ 1 ô
-    function box(ix, iy, lx, ly){
-      ctx.fillRect(lx + ix*(scale+gap), ly + iy*(scale+gap), scale, scale);
-    }
-
-    // ---- O (khối vuông đặc có lỗ giữa) ----
-    var ox = startX, oy = baseY;
-    ctx.fillStyle = '#000';
-    // khung ngoài 3x3
-    for(var j=0;j<3;j++) for(var i=0;i<3;i++) box(i,j,ox,oy);
-    // khoét lỗ giữa
-    ctx.clearRect(ox + (scale+gap) + gap*0.5, oy + (scale+gap) + gap*0.5, scale-gap, scale-gap);
-
-    // ---- K (ma trận 3x3) ----
-    var kx = ox + oW + letterGap, ky = baseY;
-    var K = [
-      [1,0,1],
-      [1,1,0],
-      [1,0,1]
-    ];
-    ctx.fillStyle = '#000';
-    for(var r=0;r<3;r++) for(var c=0;c<3;c++) if(K[r][c]) box(c,r,kx,ky);
-
-    // ---- X (ma trận 3x3) ----
-    var xx = kx + kW + letterGap, xy = baseY;
-    var X = [
-      [1,0,1],
-      [0,1,0],
-      [1,0,1]
-    ];
-    for(var r2=0;r2<3;r2++) for(var c2=0;c2<3;c2++) if(X[r2][c2]) box(c2,r2,xx,xy);
-
-    ctx.restore();
-  }
-  function road(){
-    var w=stage.clientWidth, h=stage.clientHeight;
-    ctx.fillStyle='#34495e'; ctx.fillRect(0,0,w,h);
-    ctx.fillStyle='#f1c40f';
-    for(var i=1;i<LANES;i++){
-      var x=i*laneW();
-      for(var y=0;y<h;y+=40){ ctx.fillRect(x-2,y,4,20); }
-    }
-    ctx.fillStyle='#7f8c8d';
-    ctx.fillRect(0,0,12,h);
-    ctx.fillRect(w-12,0,12,h);
-
-    // Logo OKX giữa đường, mờ dần khi xe tới gần
-    var logoW = laneW()*1.8;
-    var logoH = logoW*0.7;
-    var logoX = (w-logoW)/2;
-    var logoY = h/2 - logoH/2;
-    var pr = pRect();
-    var dy = Math.abs((pr.y+pr.h/2) - (logoY+logoH/2));
-    var alpha = Math.max(0.05, Math.min(0.18, dy/420));
-    if(!drawImageSafe(imgOkx, logoX, logoY, logoW, logoH)){
-      drawOKXVector(logoX, logoY, logoW, logoH, alpha);
-    }
-  }
-  function drawPlayer(){ var r=pRect(); if(!drawImageSafe(imgCar,r.x,r.y,r.w,r.h)){ ctx.fillStyle='#3498db'; ctx.fillRect(r.x,r.y,r.w,r.h);} }
-  function drawCars(){ for(var i=0;i<state.cars.length;i++){ var c=state.cars[i]; if(!drawImageSafe(c.img,c.x,c.y,c.w,c.h)){ ctx.fillStyle='#e74c3c'; ctx.fillRect(c.x,c.y,c.w,c.h);} } }
-  function drawBan(){ for(var i=0;i<state.bananas.length;i++){ var b=state.bananas[i]; if(!drawImageSafe(imgBan,b.x,b.y,b.size,b.size)){ ctx.fillStyle='#f1c40f'; ctx.beginPath(); ctx.arc(b.x+b.size/2,b.y+b.size/2,b.size/2,0,Math.PI*2); ctx.fill(); } } }
-  function drawGems(){ for(var i=0;i<state.gems.length;i++){ var g=state.gems[i]; if(g.type==='gold'){ ctx.beginPath(); var cx=g.x+g.size/2, cy=g.y+g.size/2; ctx.arc(cx,cy,g.size/2,0,Math.PI*2); ctx.fillStyle='#ffd700'; ctx.fill(); ctx.strokeStyle='#e6b800'; ctx.lineWidth=2; ctx.stroke(); } else { var cx2=g.x+g.size/2, cy2=g.y+g.size/2, s=g.size/2; ctx.beginPath(); ctx.moveTo(cx2,cy2-s); ctx.lineTo(cx2+s,cy2); ctx.lineTo(cx2,cy2+s); ctx.lineTo(cx2-s,cy2); ctx.closePath(); ctx.fillStyle='#00e5ff'; ctx.fill(); ctx.strokeStyle='#00b3cc'; ctx.lineWidth=2; ctx.stroke(); } } }
-
-  // ====== FX ======
-  function addPickupFX(x,y,color,text){ state.fx.push({type:'text', x:x, y:y, vy:-0.8, life:0.8, alpha:1, color:color, text:text}); var n=12; for(var i=0;i<n;i++){ var a=(Math.PI*2)*i/n; var sp=2+Math.random()*1.5; state.fx.push({type:'p',x:x,y:y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:0.6+Math.random()*0.3,alpha:1,color:color}); } }
-  function drawFX(dt){ for(var i=state.fx.length-1;i>=0;i--){ var f=state.fx[i]; f.life-=dt; if(f.life<=0){ state.fx.splice(i,1); continue; } if(f.type==='p'){ f.x+=f.vx; f.y+=f.vy; f.vx*=0.96; f.vy*=0.96; ctx.globalAlpha=Math.max(0,f.life); ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,2,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; } else { f.y+=f.vy; ctx.globalAlpha=Math.max(0,f.life/0.8); ctx.fillStyle=f.color; ctx.font='bold 16px Arial'; ctx.textAlign='center'; ctx.fillText(f.text,f.x,f.y); ctx.globalAlpha=1; } } }
-
-  // ====== HELPERS ======
-  function hit(r1,r2){ return r1.x < r2.x + r2.w - 8 && r1.x + r1.w - 8 > r2.x && r1.y < r2.y + r2.h - 15 && r1.y + r1.h - 15 > r2.y; }
-  function hitCircleRect(rect, c){ var cx=c.x+c.size/2, cy=c.y+c.size/2, cr=c.size/2; var nx=Math.max(rect.x, Math.min(cx, rect.x+rect.w)); var ny=Math.max(rect.y, Math.min(cy, rect.y+rect.h)); var dx=cx-nx, dy=cy-ny; return dx*dx+dy*dy < cr*cr; }
-
-  // ====== SPAWN ======
-  function laneBlocked(lane, y, margin){ for(var i=0;i<state.cars.length;i++){ var c=state.cars[i]; if(c.lane===lane && Math.abs(c.y - y) < margin) return true; } return false; }
-
-  // Seed immediate gameplay
-  function seedInitial(){
-    if(state.seeded) return;
-    var lanes=[0,1,2,3,4];
-    var count = 2 + Math.floor(Math.random()*2); // 2 hoặc 3
-    var rowY = -player.h()*1.2;
-    for(var i=0;i<count && lanes.length;i++){
-      var idx = Math.floor(Math.random()*lanes.length);
-      var lane = lanes.splice(idx,1)[0];
-      var w=laneW()*0.58, h=w*1.4; var x=lane*laneW()+(laneW()-w)/2; var y=rowY;
-      var img = (Math.random()<0.5?imgObs1:imgObs2);
-      state.cars.push({x:x,y:y,w:w,h:h,img:img,lane:lane,ov:false});
-    }
-    // thả 1 chuối và 1 gem ở phía trước
-    var sizeB = laneW()*0.5; var laneB = Math.floor(Math.random()*LANES); var xB = laneB*laneW() + (laneW()-sizeB)/2; var yB = -sizeB*3.2; state.bananas.push({x:xB,y:yB,size:sizeB});
-    var sizeG = laneW()*0.48; var laneG = (laneB+2)%LANES; var xG = laneG*laneW() + (laneW()-sizeG)/2; var yG = -sizeG*5.0; var type = Math.random()<0.55?'diamond':'gold'; state.gems.push({x:xG,y:yG,size:sizeG,type:type});
-    state.seeded=true;
-  }
-
-  function spawn(dt){
-    state.spawnCar += dt; state.spawnBan += dt; state.spawnGem += dt;
-    var baseRate = Math.max(0.45, state.rateCar - state.level*0.12);
-    var earlyEase = state.elapsed < 10 ? (1.0 + 0.2*state.elapsed/10) : 1;
-    var rate = baseRate * earlyEase;
-
-    if(state.spawnCar >= rate){
-      state.spawnCar = 0;
-      var countRand = Math.random();
-      var count = state.level>=3 ? (countRand<0.6?3:2) : state.level>=2 ? (countRand<0.4?3:2) : (countRand<0.2?3:2);
-      var baseGap = pRect().h * 64.0;
-      var nearestTop = -1e9; for(var i1=0;i1<state.cars.length;i1++){ var c1=state.cars[i1]; if(c1.y < 0 && c1.y > nearestTop) nearestTop = c1.y; }
-      var rowY = - (player.h());
-      if(nearestTop > -1e9 && (nearestTop - rowY) < baseGap){ rowY = nearestTop - baseGap - player.h(); }
-      var free=[0,1,2,3,4];
-      var placed=0;
-      while(placed < count && free.length){
-        var lane = free.splice(Math.floor(Math.random()*free.length),1)[0];
-        var w=laneW()*0.58, h=w*1.4; var x=lane*laneW()+(laneW()-w)/2; var y=rowY;
-        var img = (Math.random()<0.5?imgObs1:imgObs2);
-        var sameRow=0; for(var i2=0;i2<state.cars.length;i2++){ var c2=state.cars[i2]; if(Math.abs(c2.y - y) < h*0.25) sameRow++; }
-        if(sameRow>=3) break;
-        state.cars.push({x:x,y:y,w:w,h:h,img:img,lane:lane,ov:false});
-        placed++;
-      }
-    }
-
-    if(state.spawnBan >= state.rateBan){
-      state.spawnBan = 0;
-      var size = laneW()*0.5; var yb=-size; var margin=pRect().h*2.0;
-      var laneB = Math.floor(Math.random()*LANES), tries=0;
-      while(tries<10 && laneBlocked(laneB,yb,margin)){ laneB=(laneB+1)%LANES; tries++; }
-      var xb = laneB*laneW() + (laneW()-size)/2; state.bananas.push({x:xb,y:yb,size:size});
-    }
-
-    if(state.spawnGem >= state.rateGem){
-      state.spawnGem = 0;
-      var sizeG = laneW()*0.48; var yg=-sizeG; var marginG=pRect().h*2.0;
-      var laneG = Math.floor(Math.random()*LANES), triesG=0;
-      while(triesG<10 && laneBlocked(laneG,yg,marginG)){ laneG=(laneG+1)%LANES; triesG++; }
-      var xg = laneG*laneW() + (laneW()-sizeG)/2; var type = Math.random()<0.55?'diamond':'gold';
-      state.gems.push({x:xg,y:yg,size:sizeG,type:type});
+  function openWalletDeepLink(uri){
+    const enc = encodeURIComponent(uri);
+    const links = {
+      metamaskHttps: `https://metamask.app.link/wc?uri=${enc}`,
+      metamask:      `metamask://wc?uri=${enc}`,
+      okx:           `okx://wc?uri=${enc}`,
+      universal:     `https://walletconnect.com/wc?uri=${enc}`
+    };
+    if (PREFERRED_WALLET === "metamask") {
+      window.location.href = links.metamaskHttps;        // hầu hết iOS/Android
+      setTimeout(()=> window.location.href = links.metamask, 900); // fallback native scheme
+      setTimeout(()=> window.location.href = links.universal, 1800);
+    } else if (PREFERRED_WALLET === "okx") {
+      window.location.href = links.okx;
+      setTimeout(()=> window.location.href = links.universal, 1200);
+    } else {
+      window.location.href = links.universal;
     }
   }
 
-  // ====== TICK ======
-  function tick(dt){
-    if(state.hit){
-      state.hitTimer -= dt; state.flash=Math.max(0,state.flash-dt*1.8); state.shake=Math.max(0,state.shake-dt*20);
-      if(state.hitTimer<=0){ state.hit=false; gameOver(); }
-      return;
+  // ====== WalletConnect: init trên chain 1, lắng nghe display_uri để auto-deeplink mobile
+  async function getWalletConnectProvider() {
+    if (!window.WalletConnectProvider) {
+      alert("WalletConnect lib chưa tải. Refresh trang.");
+      return null;
     }
 
-    state.elapsed += dt;
-    var t = Math.min(30,state.elapsed); var a = state.accel0*(1 - t/30); state.speed = Math.min(state.maxSpeed, state.speed + a*dt);
-    state.level = Math.floor(state.score/100)+1;
+    const provider = await window.WalletConnectProvider.EthereumProvider.init({
+      projectId: WC_PROJECT_ID,
+      chains: [1],                 // mở phiên trên Ethereum
+      optionalChains: [196],       // X Layer là optional, add/switch sau
+      rpcMap: { 196: "https://rpc.xlayer.tech" },
+      showQrModal: true,           // desktop: hiện QR; mobile: ta sẽ deeplink qua display_uri
+      metadata: {
+        name: "Banmao Clicker",
+        description: "Claim BANMAO từ game clicker",
+        url: "https://banmao-game.vercel.app",
+        icons: ["https://banmao-game.vercel.app/favicon.ico"]
+      },
+      methods: [
+        "eth_requestAccounts","eth_sendTransaction","personal_sign",
+        "wallet_switchEthereumChain","wallet_addEthereumChain"
+      ],
+      events: ["chainChanged","accountsChanged","disconnect"]
+    });
 
-    spawn(dt);
+    // 🔑 Khi WalletConnect phát URI, nếu là mobile → tự deeplink sang ví
+    provider.on?.("display_uri", (uri) => {
+      if (isMobile()) openWalletDeepLink(uri);
+    });
 
-    for(var i=state.cars.length-1;i>=0;i--){
-      var c = state.cars[i]; c.y += state.speed*dt*60;
-      if(hit(pRect(),{x:c.x,y:c.y,w:c.w,h:c.h})){
-        state.hit=true; state.hitTimer=0.8; state.flash=1; state.shake=12; state.speed=0; playCrash();
+    await provider.connect();
+
+    // Đợi accounts nếu ví chưa trả ngay
+    const accs = (provider.accounts && provider.accounts.length)
+      ? provider.accounts
+      : await new Promise((resolve, reject) => {
+          const to = setTimeout(()=>reject(new Error("WalletConnect timeout: no accounts")), 15000);
+          const handler = (accounts) => { clearTimeout(to); provider.removeListener?.("accountsChanged", handler); resolve(accounts); };
+          provider.on?.("accountsChanged", handler);
+        });
+
+    return provider;
+  }
+
+  async function pickInjected(mode="auto"){
+    if (mode === "walletconnect") return await getWalletConnectProvider();
+    const okx = window.okxwallet?.ethereum || window.okxwallet || null;
+    const mm  = window.ethereum || null;
+    if (mode==="okx") return okx;
+    if (mode==="metamask") return mm;
+    return okx || mm; // auto
+  }
+
+  async function ensureXLayer(injected){
+    try{
+      const id = await injected.request({ method: "eth_chainId" });
+      if (id === XLAYER_CHAIN_ID_HEX) return;
+      await injected.request({ method:"wallet_switchEthereumChain", params:[{ chainId: XLAYER_CHAIN_ID_HEX }] });
+    }catch(e){
+      if (e?.code===4902 || /Unrecognized/i.test(e?.message||"")){
+        await injected.request({ method:"wallet_addEthereumChain", params:[{
+          chainId: XLAYER_CHAIN_ID_HEX,
+          chainName: "X Layer Mainnet",
+          rpcUrls: ["https://rpc.xlayer.tech"],
+          nativeCurrency: { name:"OKB", symbol:"OKB", decimals:18 },
+          blockExplorerUrls:["https://www.oklink.com/xlayer"]
+        }]} );
+      } else throw e;
+    }
+  }
+
+  function waitForEthers(){
+    return new Promise(resolve=>{
+      const tick=()=>{ if (window.ethers) resolve(); else setTimeout(tick,120); };
+      tick();
+    });
+  }
+
+  // ====== Runtime state ======
+  let provider, signer, account, tokenDecimals=18;
+
+  wcQuickBtn.onclick = (e)=>{ e.preventDefault(); walletSelect.value = "walletconnect"; connectBtn.click(); };
+
+  // ====== Connect (desktop/mobile + WalletConnect) ======
+  connectBtn.onclick = async () => {
+    try{
+      statusEl.textContent = "🔎 Tìm ví...";
+      const mode = walletSelect.value;
+
+      // Lấy provider (injected hoặc WalletConnect)
+      const injected = await pickInjected(mode);
+      if (!injected){
+        if (isMobile()) alert("Không thấy ví. Dùng Open in MetaMask/OKX hoặc chọn WalletConnect.");
+        else alert("Không thấy ví (MetaMask/OKX). Cài extension rồi refresh.");
+        statusEl.textContent="No wallet";
         return;
       }
-      if(!c.ov && c.y > pRect().y + pRect().h){ c.ov=true; state.overtakes++; }
-      if(c.y > stage.clientHeight) state.cars.splice(i,1);
-    }
 
-    for(var j=state.bananas.length-1;j>=0;j--){
-      var b = state.bananas[j]; b.y += state.speed*dt*60;
-      if(hitCircleRect(pRect(), b)){
-        state.combo++; if(state.combo>state.maxCombo) state.maxCombo=state.combo;
-        var mul = (state.combo % 10 === 0 ? 2 : 1);
-        var add = 3 * mul; state.score += add;
-        addPickupFX(b.x+b.size/2,b.y+b.size/2,'#ffea00','+'+add);
-        playPickup();
-        state.bananas.splice(j,1);
-      } else if(b.y>stage.clientHeight) state.bananas.splice(j,1);
-    }
+      statusEl.textContent = "🧾 Yêu cầu quyền...";
+      let accounts;
+      try {
+        accounts = await injected.request({ method:"eth_requestAccounts" });
+      } catch(e) {
+        accounts = injected.accounts || [];
+      }
+      account = (accounts && accounts[0]) || injected.accounts?.[0];
+      if (!account){ statusEl.textContent = "No account"; return; }
 
-    for(var k=state.gems.length-1;k>=0;k--){
-      var g = state.gems[k]; g.y += state.speed*dt*60;
-      if(hitCircleRect(pRect(), g)){
-        state.combo++; if(state.combo>state.maxCombo) state.maxCombo=state.combo;
-        var mul2 = (state.combo % 10 === 0 ? 2 : 1);
-        var base = (g.type==='diamond'?2:1); var add2 = base*mul2; state.score += add2;
-        var col = g.type==='diamond'?'#00e5ff':'#ffd700';
-        addPickupFX(g.x+g.size/2,g.y+g.size/2,col,'+'+add2);
-        playPickup();
-        state.gems.splice(k,1);
-      } else if(g.y>stage.clientHeight) state.gems.splice(k,1);
-    }
+      statusEl.textContent = "🔁 Chuyển mạng...";
+      try {
+        await ensureXLayer(injected);
+      } catch {
+        statusEl.textContent = "⚠️ Hãy chuyển sang X Layer (196) trong ví rồi quay lại.";
+      }
 
-    ui();
-  }
+      await waitForEthers();
+      provider = new ethers.BrowserProvider(injected);
+      signer   = await provider.getSigner();
 
-  function gameOver(){ state.running=false; $('fs').textContent=(state.score|0); $('fo').textContent=(state.overtakes|0); $('fc').textContent=(state.maxCombo||1)+'×'; over.style.display='flex'; }
-
-  // ====== LOOP ======
-  var loopId=0;
-  function loop(now){
-    if(!state.running||state.paused) return;
-    now = now || performance.now();
-    var dt = Math.min(0.05,(now-state.last)/1000)||0; state.last=now;
-    // clear full res buffer (avoid black frame bugs)
-    var dpr = window.devicePixelRatio||1; ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,cv.width,cv.height);
-    if(state.shake>0){ ctx.save(); ctx.translate((Math.random()*2-1)*state.shake,(Math.random()*2-1)*state.shake); }
-    road(); drawCars(); drawBan(); drawGems(); drawPlayer(); drawFX(dt);
-    if(state.shake>0){ ctx.restore(); }
-    if(state.flash>0){ ctx.fillStyle='rgba(255,255,255,'+state.flash+')'; ctx.fillRect(0,0,cv.clientWidth,cv.clientHeight); }
-    tick(dt);
-    state.frames++;
-    loopId=requestAnimationFrame(loop);
-  }
-
-  // ====== AUDIO ======
-  var actx=null; function ensureAudio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
-  function beep(freq,dur,attack,release,type,gain){ if(!actx) return; attack=attack||0.01; release=release||0.08; type=type||'sine'; gain=gain||0.12; var osc=actx.createOscillator(); var g=actx.createGain(); osc.type=type; osc.frequency.setValueAtTime(freq, actx.currentTime); g.gain.setValueAtTime(0, actx.currentTime); g.gain.linearRampToValueAtTime(gain, actx.currentTime+attack); g.gain.linearRampToValueAtTime(0, actx.currentTime+dur-release); osc.connect(g); g.connect(actx.destination); osc.start(); osc.stop(actx.currentTime+dur); }
-  function playPickup(){ ensureAudio(); beep(880,0.08,0.005,0.04,'triangle',0.10); setTimeout(function(){beep(1320,0.07,0.005,0.05,'triangle',0.09);},60); }
-  function playCrash(){ ensureAudio(); if(!actx) return; var dur=0.35; var noise=actx.createBufferSource(); var buffer=actx.createBuffer(1, actx.sampleRate*dur, actx.sampleRate); var data=buffer.getChannelData(0); for(var i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*Math.exp(-3*i/data.length); } noise.buffer=buffer; var g=actx.createGain(); g.gain.setValueAtTime(0.18, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime+dur); noise.connect(g); g.connect(actx.destination); noise.start(); }
-
-  // enable audio on first clicks
-  ;['start','again','restart'].forEach(function(id){ var el=$(id); if(el){ el.addEventListener('click', ensureAudio, {once:true}); }});
-
-  // ====== TESTS (non-invasive) ======
-  window.__banmaoTests = {
-    run: function(){
-      console.group('%cBanmaoX tests','color:#0bf');
-      console.assert(typeof road==='function','road() must exist');
-      console.assert(typeof start==='function','start() must exist');
-      console.assert(typeof loop==='function','loop() must exist');
-      console.assert(typeof spawn==='function','spawn() must exist');
-      console.assert(typeof drawPlayer==='function','drawPlayer() must exist and be parseable');
-      console.assert(!!document.querySelector('style'), 'style tag exists');
-      reset(); seedInitial();
-      console.assert(state.cars.length>0 || state.bananas.length>0 || state.gems.length>0, 'seedInitial() should create gameplay entities');
-      console.groupEnd();
-    },
-    clickStart: function(){
-      $('start').click(); setTimeout(function(){
-        console.assert(state.running===true, 'Clicking #start should set running=true');
-        console.assert(state.frames>0, 'Game loop should render frames after start');
-      }, 300);
-    },
-    startHasEntities: function(){
-      start(); setTimeout(function(){
-        var count = state.cars.length + state.bananas.length + state.gems.length;
-        console.assert(count>0, 'After start, there should be initial entities');
-        console.assert(state.running===true, 'After start, game should be running');
-      }, 150);
-    },
-    runGuards: function(){
-      console.group('%cBanmaoX image guards','color:#0bf');
-      var dummy = new Image();
-      console.assert(!canDraw(dummy), 'canDraw() must be false for unloaded image');
-      try{ drawImageSafe(dummy,0,0,10,10); console.log('drawImageSafe ok'); }catch(e){ console.error('drawImageSafe threw', e); }
-      console.groupEnd();
+      addrEl.textContent = account.slice(0,6)+'...'+account.slice(-4);
+      statusEl.textContent = "✅ Connected";
+      await updateBalance();
+      await checkClaimed();
+    }catch(err){
+      console.error("CONNECT_ERR:", err);
+      statusEl.textContent = "❌ " + (err?.shortMessage || err?.message || err);
+      alert("Connect error: " + (err?.message || err));
     }
   };
 
-  // Expose some handles for debugging
-  window.__banmao = {state:state,start:start,fit:fit};
+  async function updateBalance(){
+    try{
+      if (!provider || !account) return;
+      const token = new ethers.Contract(TOKEN_ADDR, ERC20_ABI, provider);
+      tokenDecimals = await token.decimals();
+      const bal = await token.balanceOf(account);
+      balEl.textContent = ethers.formatUnits(bal, tokenDecimals);
+    }catch(e){ balEl.textContent="—"; }
+  }
 
-  // Optional: log uncaught errors for easier debug
-  window.addEventListener('error', function(e){ console.error('Uncaught', e.message); });
-})();
+  async function checkClaimed(){
+    try{
+      if (!provider || !account) return;
+      const game = new ethers.Contract(GAME_ADDR, GAME_ABI, provider);
+      const done = await game.claimed(account);
+      if (done){ statusEl.textContent="✅ Already claimed"; claimBtn.disabled=true; }
+      else { statusEl.textContent="Ready to claim"; claimBtn.disabled=false; }
+    }catch(e){ /* ignore */ }
+  }
+
+  // ====== Claim: 10 điểm = 1 BANMAO, nguyên số, cap 333 ======
+  claimBtn.onclick = async () => {
+    try{
+      if (!signer) return alert("Connect wallet first!");
+      const banmaoNow = score/10;
+      if (banmaoNow < 1) return alert("Need at least 1 BANMAO to claim!");
+      const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
+
+      const game = new ethers.Contract(GAME_ADDR, GAME_ABI, signer);
+      const tx = await game.claimReward(amount);
+      statusEl.textContent = "⏳ Tx: "+tx.hash;
+      claimBtn.disabled = true;
+      await tx.wait();
+      statusEl.textContent = "✅ Claim succeeded ("+amount+" BANMAO)";
+      await updateBalance();
+      await checkClaimed();
+    }catch(e){
+      statusEl.textContent = "❌ "+(e?.shortMessage||e?.reason||e?.message||e);
+      claimBtn.disabled = false;
+    }
+  };
+
+  // ====== Mini-game (đầu mèo) ======
+  let score = 0;
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  let banana = { x: 720, y: 220, r: 34, vx: 1.1, vy: 0.9 };
+
+  function drawCatHead(){
+    const x = 200, y = 250, r = 60;
+    ctx.fillStyle='#ffd84d';
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    // ears
+    ctx.beginPath(); ctx.moveTo(x-r*0.6, y-r*0.3); ctx.lineTo(x-r*0.2, y-r*1.0); ctx.lineTo(x-r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x+r*0.6, y-r*0.3); ctx.lineTo(x+r*0.2, y-r*1.0); ctx.lineTo(x+r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
+    // eyes
+    ctx.fillStyle='#111';
+    ctx.beginPath(); ctx.arc(x-r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
+    // nose
+    ctx.beginPath(); ctx.moveTo(x-5,y+10); ctx.lineTo(x+5,y+10); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
+    // mouth
+    ctx.strokeStyle='#111'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(x-5,y+20,7,0,Math.PI); ctx.arc(x+5,y+20,7,0,Math.PI); ctx.stroke();
+    // whiskers
+    ctx.beginPath(); ctx.moveTo(x-20,y+5);  ctx.lineTo(x-45,y);    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-20,y+12); ctx.lineTo(x-45,y+15); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+20,y+5);  ctx.lineTo(x+45,y);    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+20,y+12); ctx.lineTo(x+45,y+15); ctx.stroke();
+  }
+
+  function drawBanana(){
+    ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 18; ctx.beginPath();
+    ctx.arc(banana.x, banana.y, banana.r, Math.PI*0.12, Math.PI*1.12); ctx.stroke();
+    ctx.fillStyle = '#ffd84d'; ctx.beginPath();
+    ctx.arc(banana.x + banana.r*Math.cos(Math.PI*0.12), banana.y + banana.r*Math.sin(Math.PI*0.12), 6, 0, Math.PI*2); ctx.fill();
+  }
+
+  function drawBG(){
+    ctx.fillStyle='#121212'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
+    for(let x=0;x<canvas.width;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+    for(let y=0;y<canvas.height;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
+  }
+
+  function animate(){
+    drawBG(); drawCatHead(); drawBanana();
+    banana.x += banana.vx; banana.y += banana.vy;
+    if(banana.x > canvas.width-40 || banana.x < 40) banana.vx *= -1;
+    if(banana.y > canvas.height-40 || banana.y < 40) banana.vy *= -1;
+    requestAnimationFrame(animate);
+  } animate();
+
+  // Progress bar
+  function updateProgress(banmaoNow){
+    const bar = document.getElementById('progressBar');
+    const txt = document.getElementById('progressText');
+    const pct = Math.min(100, (banmaoNow/MAX_BANMAO)*100);
+    bar.style.width = pct+"%";
+    txt.textContent = banmaoNow.toFixed(3)+" / "+MAX_BANMAO+" BANMAO";
+  }
+
+  function hit(mx,my,obj){ const dx=mx-obj.x, dy=my-obj.y; return Math.hypot(dx,dy) <= obj.r + 20; }
+  canvas.addEventListener('click', (e)=>{
+    const r = canvas.getBoundingClientRect();
+    const mx = (e.clientX - r.left) * (canvas.width/r.width);
+    const my = (e.clientY - r.top) * (canvas.height/r.height);
+    if (hit(mx,my,banana)){
+      const v = 10;
+      let banmaoNow = (score+v)/10;
+      if(banmaoNow > MAX_BANMAO){ 
+        statusEl.textContent = "🚫 Max cap "+MAX_BANMAO+" BANMAO";
+        return;
+      }
+      score += v;
+      document.getElementById('score').textContent = score;
+      document.getElementById('earned').textContent = (score/10).toFixed(3);
+      updateProgress(score/10);
+      banana.r = 40; setTimeout(()=> banana.r=34,120);
+    }
+  });
 </script>
 </body>
 </html>
