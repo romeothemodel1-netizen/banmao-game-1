@@ -118,14 +118,23 @@ function openWalletDeepLink(uri){
   let i=0; (function step(){ if(i>=seq.length) return; location.href = seq[i++]; setTimeout(step, 1100); })();
 }
 
+function getEP(){
+  const g=window;
+  return (
+    g.WalletConnectProvider?.EthereumProvider ||
+    g.WalletConnect?.EthereumProvider ||
+    g.WalletConnectEthereumProvider ||
+    null
+  );
+}
+
 async function ensureWC(){
-  // Try multiple CDNs because some mobile networks block one of them
-  const OK = () => !!(window.WalletConnectProvider && window.WalletConnectProvider.EthereumProvider);
+  const OK = () => !!getEP();
   if (OK()) return true;
   const urls = [
     'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
     'https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/walletconnect-ethereum-provider/2.12.0/index.umd.min.js'
+    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2/dist/umd/index.min.js'
   ];
   for (const src of urls){
     await new Promise((resolve)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=resolve; s.onerror=resolve; document.head.appendChild(s); });
@@ -148,7 +157,7 @@ async function connectWallet(){
       $('status').textContent='⏳ Loading WC...';
       const ok = await ensureWC();
       if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded'; showMobileFallback(); return; }
-      const EP = window.WalletConnectProvider.EthereumProvider;
+      const EP = getEP();
       const provider = await EP.init({
         projectId: WC_PROJECT_ID,
         chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
