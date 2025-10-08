@@ -7,8 +7,8 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
-<!-- WalletConnect UMD -->
-<script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js"></script>
+<!-- WalletConnect v2 polyfill -->
+<script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.9.0/dist/umd/index.min.js"></script>
 
 <style>
   :root { --yellow:#ffd84d; }
@@ -31,13 +31,6 @@
     <div class="row">
       <h1>Banmao Clicker – Pool V1</h1>
       <div>
-        <select id="walletSelect" class="pill">
-          <option value="auto">Auto (OKX / MetaMask / Trust)</option>
-          <option value="okx">Force OKX Wallet</option>
-          <option value="metamask">Force MetaMask</option>
-          <option value="trust">Force Trust Wallet</option>
-          <option value="walletconnect">WalletConnect (QR / Mobile)</option>
-        </select>
         <button id="connect" class="btn">Connect Wallet</button>
         <button id="claim" class="btn">Claim BANMAO</button>
       </div>
@@ -63,7 +56,7 @@
 const $ = (id)=>document.getElementById(id);
 const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-/*********************** GAME (CAT + BANANA) *************************/
+/*********************** GAME *************************/
 (function initGame(){
   const canvas=$('game'); const ctx=canvas.getContext('2d');
   let score=0; const MAX=333;
@@ -91,7 +84,7 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   canvas.addEventListener('click', (e)=>{
     const r=canvas.getBoundingClientRect();
     const mx=(e.clientX-r.left)*(canvas.width/r.width);
-    const my=(e.clientY-r.top)*(canvas.height/r.top);
+    const my=(e.clientY-r.top)*(canvas.height/r.height);
     if(hit(mx,my)){
       score=Math.min(MAX,score+10); scoreEl.textContent=score; const earned=score/10;
       earnedEl.textContent=earned.toFixed(3); bar.style.width=Math.min(100,(earned/MAX)*100)+'%'; ptxt.textContent=earned.toFixed(3)+' / 333 BANMAO';
@@ -101,15 +94,19 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   window.__banmaoScore=score;
 })();
 
-/*********************** WALLETCONNECT (OKX-FOCUSED) *************************/
+/*********************** WALLETCONNECT *************************/
 const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
 
 async function connectWallet(){
   try{
     if(isMobile()){
-      const provider=await window.WalletConnectProvider.EthereumProvider.init({
+      if(!window.WalletConnectProvider){
+        $('status').textContent='❌ WalletConnect lib not loaded';
+        return;
+      }
+      const provider=await window.WalletConnectProvider.init({
         projectId:WC_PROJECT_ID,
-        chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
+        chains:[1], optionalChains:[196], rpc:{196:'https://rpc.xlayer.tech'},
         showQrModal:true,
         metadata:{ name:'Banmao Clicker', description:'Connect to claim', url:location.origin, icons:['/favicon.ico'] }
       });
