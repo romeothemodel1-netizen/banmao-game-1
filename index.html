@@ -50,6 +50,11 @@
       <a class="pill" id="openMM" href="#">Open in MetaMask</a>
     </div>
 
+    <div id="wcHelp" style="display:none;gap:8px;margin:6px 0;flex-wrap:wrap">
+      <span class="pill" style="opacity:.8">Không thấy lời mời trong ví?</span>
+      <a class="pill" id="openWalletAgain" href="#">Mở lại ví</a>
+    </div>
+
     <canvas id="game" width="900" height="460" style="margin-top:12px"></canvas>
 
     <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
@@ -104,6 +109,7 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 /* ********************* WALLETCONNECT *************************/
 const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
+let __lastWCURI = null;
 
 // Prefer OKX deep link on Android; fall back to MetaMask and universal
 function openWalletDeepLink(uri){
@@ -149,6 +155,8 @@ function showMobileFallback(){
   const dapp=encodeURIComponent(location.href);
   document.getElementById('openOkx').setAttribute('href',`okx://wallet/dapp?url=${dapp}`);
   document.getElementById('openMM').setAttribute('href',`https://metamask.app.link/dapp/${location.host}${location.pathname}`);
+  const h=document.getElementById('wcHelp'); if(h) h.style.display='flex';
+  const btn=document.getElementById('openWalletAgain'); if(btn){ btn.onclick=(e)=>{ e.preventDefault(); if(__lastWCURI) openWalletDeepLink(__lastWCURI); else tryOpenWalletDapp(); }; }
 }
 
 // Auto open DApp inside wallet if WC library cannot be loaded on mobile networks
@@ -175,8 +183,10 @@ async function connectWallet(){
         showQrModal:false,
         metadata:{ name:'Banmao Clicker', description:'Connect', url:location.origin, icons:['/favicon.ico'] }
       });
-      provider.on?.('display_uri', (uri)=>{ $('status').textContent='🔗 Opening wallet...'; openWalletDeepLink(uri); });
-      await provider.connect();
+      provider.on?.('display_uri', (uri)=>{ $('status').textContent='🔗 Opening wallet...'; __lastWCURI = uri; openWalletDeepLink(uri); });
+      // Start a watchdog: if user doesn't approve in 12s, show a helper button to re-open the wallet
+let approved=false; const watchdog=setTimeout(()=>{ if(!approved){ $('status').textContent='ℹ️ Hãy duyệt kết nối trong ví. Nếu chưa hiện, bấm “Mở lại ví”.'; const h=document.getElementById('wcHelp'); if(h) h.style.display='flex'; const btn=document.getElementById('openWalletAgain'); if(btn){ btn.onclick=(e)=>{ e.preventDefault(); if(__lastWCURI) openWalletDeepLink(__lastWCURI); }; } } }, 12000);
+await provider.connect(); approved=true; clearTimeout(watchdog);
       const accounts = await provider.request({method:'eth_requestAccounts'});
       $('addr').textContent = accounts?.[0] || '—';
       $('status').textContent = '✅ Connected';
