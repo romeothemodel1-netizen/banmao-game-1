@@ -7,7 +7,7 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
-<!-- WC UMD (primary) -->
+<!-- WalletConnect UMD (primary) -->
 <script src="https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js"></script>
 
 <style>
@@ -111,8 +111,36 @@ const GAME_ABI = [ 'function claimReward(uint256 score) external', 'function cla
 const ERC20_ABI = [ 'function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)' ];
 
 /*********************** WC Deeplink helpers *************************/
-function wcLinks(uri){ const enc=encodeURIComponent(uri); return { metamaskHttps:`https://metamask.app.link/wc?uri=${enc}`, metamask:`metamask://wc?uri=${enc}`, okx:`okx://wc?uri=${enc}`, trustHttps:`https://link.trustwallet.com/wc?uri=${enc}`, trust:`trust://wc?uri=${enc}`, coinbaseHttps:`https://go.cb-w.com/wc?uri=${enc}`, coinbase:`coinbase://wallet/wc?uri=${enc}`, rainbowHttps:`https://rainbow.me/wc?uri=${enc}`, rainbow:`rainbow://wc?uri=${enc}`, bitget:`bitkeep://wc?uri=${enc}`, universal:`https://walletconnect.com/wc?uri=${enc}` }; }
-function openWcDeeplink(uri, pref){ const L=wcLinks(uri); const seq = pref==='okx'?[L.okx,L.universal]: pref==='trust'?[L.trustHttps,L.trust,L.universal]: pref==='coinbase'?[L.coinbaseHttps,L.coinbase,L.universal]: pref==='rainbow'?[L.rainbowHttps,L.rainbow,L.universal]: pref==='bitget'?[L.bitget,L.universal]: [L.metamaskHttps,L.metamask,L.universal]; let i=0; const step=()=>{ if(i>=seq.length) return; location.href=seq[i++]; setTimeout(step, 900); }; step(); }
+function wcLinks(uri){
+  const enc=encodeURIComponent(uri);
+  return {
+    metamaskHttps:`https://metamask.app.link/wc?uri=${enc}`,
+    metamask:`metamask://wc?uri=${enc}`,
+    okx:`okx://wc?uri=${enc}`,
+    okxIntent:`intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;end`,
+    trustHttps:`https://link.trustwallet.com/wc?uri=${enc}`,
+    trust:`trust://wc?uri=${enc}`,
+    coinbaseHttps:`https://go.cb-w.com/wc?uri=${enc}`,
+    coinbase:`coinbase://wallet/wc?uri=${enc}`,
+    rainbowHttps:`https://rainbow.me/wc?uri=${enc}`,
+    rainbow:`rainbow://wc?uri=${enc}`,
+    bitget:`bitkeep://wc?uri=${enc}`,
+    universal:`https://walletconnect.com/wc?uri=${enc}`
+  };
+}
+
+let __deepLinkWindow = null;
+function openWcDeeplink(uri, pref){
+  const L=wcLinks(uri);
+  const nav=(href)=>{ try{ if(__deepLinkWindow && !__deepLinkWindow.closed){ __deepLinkWindow.location.href = href; } else { location.href = href; } }catch{ location.href = href; } };
+  const seq = pref==='okx' ? [L.okx, L.okxIntent, L.universal]
+            : pref==='trust' ? [L.trustHttps, L.trust, L.universal]
+            : pref==='coinbase' ? [L.coinbaseHttps, L.coinbase, L.universal]
+            : pref==='rainbow' ? [L.rainbowHttps, L.rainbow, L.universal]
+            : pref==='bitget' ? [L.bitget, L.universal]
+            : [L.metamaskHttps, L.metamask, L.universal];
+  let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step, 1000); })();
+}
 
 /*********************** WalletConnect bootstrap *************************/
 async function ensureWCLib(){
@@ -168,22 +196,26 @@ async function pickProvider(mode){
 $('connect').addEventListener('click', async ()=>{
   try{
     $('status').textContent='🔎 Preparing...';
+    // reserve a window to keep user gesture so Chrome won't block deep link
+    if(isMobile()){ try{ __deepLinkWindow = window.open('', '_blank'); }catch{} }
+
     const mode = $('walletSelect').value;
     const injected = await pickProvider(mode);
-    if(!injected){ $('status').textContent='❌ Wallet not found'; return; }
+    if(!injected){ $('status').textContent='❌ Wallet not found'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } return; }
     $('status').textContent='🧾 Requesting permission...';
     let accounts;
     try { accounts = await injected.request?.({ method:'eth_requestAccounts' }); }
     catch { accounts = injected.accounts || []; }
     account = (accounts && accounts[0]) || injected.accounts?.[0];
-    if(!account){ $('status').textContent='❌ No account'; return; }
+    if(!account){ $('status').textContent='❌ No account'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } return; }
     $('status').textContent='🔁 Switching network...';
     try{ await ensureXLayer(injected); }catch{ $('status').textContent='⚠️ Switch to X Layer (196) in wallet'; }
     provider = new ethers.BrowserProvider(injected); signer = await provider.getSigner();
     $('addr').textContent = account.slice(0,6)+'...'+account.slice(-4);
     $('status').textContent='✅ Connected';
+    if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} }
     await updateBalance(); await checkClaimed();
-  }catch(err){ console.error('CONNECT_ERR',err); $('status').textContent='❌ '+(err?.shortMessage||err?.message||err); }
+  }catch(err){ console.error('CONNECT_ERR',err); $('status').textContent='❌ '+(err?.shortMessage||err?.message||err); if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } }
 });
 
 $('claim').addEventListener('click', async ()=>{
