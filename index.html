@@ -5,17 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Banmao Clicker – Pool V1</title>
 
-<!-- Ethers v6 + fallback (chỉ dùng sau khi đã connect xong) -->
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js" defer onerror="loadEthersFallback()"></script>
-<script>
-  function loadEthersFallback(){
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/ethers@6.13.2/dist/ethers.umd.min.js';
-    s.defer=true;
-    s.onerror=()=>alert('Không tải được thư viện ethers từ 2 CDN.');
-    document.head.appendChild(s);
-  }
-</script>
+<!-- Ethers v6 từ cdnjs + fallback sang unpkg -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"
+        onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/ethers@6.13.2/dist/ethers.umd.min.js';document.head.appendChild(s);}())"></script>
 
 <style>
   :root { --yellow:#ffd84d; }
@@ -62,7 +54,7 @@
 </div>
 
 <script>
-  // ====== CONFIG ======
+  // ====== ONCHAIN CONFIG ======
   const TOKEN_ADDR = "0x16d91d1615fC55b76d5F92365BD60C069b46ef78";
   const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143";
   const MAX_BANMAO = 333;
@@ -85,14 +77,15 @@
   const balEl    = document.getElementById("balance");
   const statusEl = document.getElementById("status");
 
-  // ====== Chain helpers ======
+  // ====== Helpers ======
   function pickInjected(mode="auto"){
     const okx = window.okxwallet?.ethereum || window.okxwallet || null;
     const mm  = window.ethereum || null;
     if (mode==="okx") return okx;
     if (mode==="metamask") return mm;
-    return okx || mm; // auto
+    return okx || mm;
   }
+
   async function ensureXLayer(injected){
     try{
       const id = await injected.request({ method: "eth_chainId" });
@@ -111,34 +104,33 @@
     }
   }
 
+  function waitForEthers(){
+    return new Promise(resolve=>{
+      const tick=()=>{ if (window.ethers) resolve(); else setTimeout(tick,150); };
+      tick();
+    });
+  }
+
   // ====== Runtime state ======
   let provider, signer, account, tokenDecimals=18;
 
-  // ====== Connect: KHÔNG phụ thuộc ethers để bật popup ======
+  // ====== Connect (KHÔNG phụ thuộc ethers để bật popup) ======
   connectBtn.onclick = async () => {
     try{
       statusEl.textContent = "🔎 Tìm ví...";
       const injected = pickInjected(walletSelect.value);
-      if (!injected){
-        alert("❌ Không tìm thấy ví (MetaMask/OKX). Cài extension rồi refresh trang.");
-        statusEl.textContent = "No wallet found";
-        return;
-      }
+      if (!injected){ alert("❌ Không thấy ví (MetaMask/OKX). Cài extension rồi refresh."); statusEl.textContent="No wallet"; return; }
 
       statusEl.textContent = "🧾 Yêu cầu quyền...";
       const accounts = await injected.request({ method:"eth_requestAccounts" });
       account = accounts?.[0];
-      if (!account){ statusEl.textContent = "Không lấy được tài khoản"; return; }
+      if (!account){ statusEl.textContent = "No account"; return; }
 
       statusEl.textContent = "🔁 Kiểm tra mạng...";
       await ensureXLayer(injected);
 
-      // Lúc này mới dùng ethers
-      if (typeof window.ethers === "undefined"){
-        alert("ethers chưa tải xong – hãy refresh trang (CDN).");
-        statusEl.textContent = "ethers not loaded";
-        return;
-      }
+      // Chỉ cần ethers từ đây trở đi
+      await waitForEthers();
       provider = new ethers.BrowserProvider(injected);
       signer   = await provider.getSigner();
 
@@ -162,6 +154,7 @@
       balEl.textContent = ethers.formatUnits(bal, tokenDecimals);
     }catch(e){ balEl.textContent="—"; }
   }
+
   async function checkClaimed(){
     try{
       if (!provider || !account) return;
@@ -217,18 +210,21 @@
     ctx.beginPath(); ctx.moveTo(x+20,y+5);  ctx.lineTo(x+45,y);    ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x+20,y+12); ctx.lineTo(x+45,y+15); ctx.stroke();
   }
+
   function drawBanana(){
     ctx.strokeStyle = '#ffd84d'; ctx.lineWidth = 18; ctx.beginPath();
     ctx.arc(banana.x, banana.y, banana.r, Math.PI*0.12, Math.PI*1.12); ctx.stroke();
     ctx.fillStyle = '#ffd84d'; ctx.beginPath();
     ctx.arc(banana.x + banana.r*Math.cos(Math.PI*0.12), banana.y + banana.r*Math.sin(Math.PI*0.12), 6, 0, Math.PI*2); ctx.fill();
   }
+
   function drawBG(){
     ctx.fillStyle='#121212'; ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1;
     for(let x=0;x<canvas.width;x+=32){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
     for(let y=0;y<canvas.height;y+=32){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
   }
+
   function animate(){
     drawBG(); drawCatHead(); drawBanana();
     banana.x += banana.vx; banana.y += banana.vy;
