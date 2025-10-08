@@ -4,7 +4,22 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Banmao Clicker – Pool V1</title>
-<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js"></script>
+
+<!-- Ethers v6 + fallback -->
+<script
+  src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.min.js"
+  defer
+  onerror="loadEthersFallback()"></script>
+<script>
+  function loadEthersFallback(){
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/ethers@6.13.2/dist/ethers.umd.min.js';
+    s.defer=true;
+    s.onerror=()=>alert('Không tải được thư viện ethers từ cả 2 CDN. Kiểm tra mạng/Adblock.');
+    document.head.appendChild(s);
+  }
+</script>
+
 <style>
   :root { --yellow:#ffd84d; }
   html,body{margin:0;background:#0b0b0b;color:#fff;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
@@ -80,6 +95,17 @@
   // ====== Provider state ======
   let provider, signer, account, tokenDecimals = 18;
 
+  // Chờ ethers sẵn sàng rồi mới cho bấm (tránh user click quá sớm)
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const ready = ()=> typeof window.ethers !== 'undefined';
+    if (!ready()) {
+      const id = setInterval(()=>{
+        if (ready()){ clearInterval(id); connectBtn.disabled = false; }
+      }, 200);
+      connectBtn.disabled = true;
+    }
+  });
+
   // Simple provider pick
   function pickProvider(mode="auto"){
     const okx = window.okxwallet?.ethereum || window.okxwallet || null;
@@ -93,14 +119,12 @@
     try{
       const chainId = await injected.request({ method: "eth_chainId" });
       if (chainId === XLAYER_CHAIN_ID_HEX) return true;
-      // thử switch
       await injected.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: XLAYER_CHAIN_ID_HEX }]
       });
       return true;
     }catch(e){
-      // nếu chưa có mạng, thêm mới
       if (e && (e.code === 4902 || /Unrecognized chain/i.test(e.message||""))) {
         await injected.request({
           method: "wallet_addEthereumChain",
@@ -142,10 +166,17 @@
   // ====== Connect (đơn giản, chắc chắn popup) ======
   connectBtn.onclick = async () => {
     try{
-      const injected = pickProvider(walletSelect.value);
-      if(!injected){ alert("❌ Không tìm thấy ví. Cài MetaMask hoặc OKX Wallet!"); return; }
+      const injected =
+        walletSelect.value==="okx"      ? (window.okxwallet?.ethereum || window.okxwallet) :
+        walletSelect.value==="metamask" ? window.ethereum :
+        (window.okxwallet?.ethereum || window.okxwallet || window.ethereum);
 
-      // yêu cầu quyền + đảm bảo đúng mạng X Layer
+      if(!injected){ alert("❌ Không thấy ví (MetaMask/OKX). Cài extension rồi refresh trang."); return; }
+      if (typeof window.ethers === "undefined") {
+        alert("Connect failed: ethers is not defined (CDN chưa tải xong). Vui lòng refresh trang.");
+        return;
+      }
+
       await injected.request({ method: "eth_requestAccounts" });
       await ensureXLayer(injected);
 
@@ -163,12 +194,11 @@
     }
   };
 
-  // ====== Claim: 10 điểm = 1 BANMAO, chỉ lấy nguyên, cap 333 ======
+  // ====== Claim: 10 điểm = 1 BANMAO, lấy nguyên, cap 333 ======
   claimBtn.onclick = async () => {
     try{
       if (!signer) return alert("Connect wallet first!");
       const banmaoNow = score/10;
-
       if (banmaoNow < 1) return alert("Need at least 1 BANMAO to claim!");
       const amount = Math.min(MAX_BANMAO, Math.floor(banmaoNow));
 
@@ -187,7 +217,6 @@
   };
 
   // ====== Mini-game (head-only) ======
-  const MAX_BANMAO_LOCAL = MAX_BANMAO;
   let score = 0;
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
@@ -242,9 +271,9 @@
   function updateProgress(banmaoNow){
     const bar = document.getElementById('progressBar');
     const txt = document.getElementById('progressText');
-    const pct = Math.min(100, (banmaoNow/MAX_BANMAO_LOCAL)*100);
+    const pct = Math.min(100, (banmaoNow/MAX_BANMAO)*100);
     bar.style.width = pct+"%";
-    txt.textContent = banmaoNow.toFixed(3)+" / "+MAX_BANMAO_LOCAL+" BANMAO";
+    txt.textContent = banmaoNow.toFixed(3)+" / "+MAX_BANMAO+" BANMAO";
   }
 
   function hit(mx,my,obj){ const dx=mx-obj.x, dy=my-obj.y; return Math.hypot(dx,dy) <= obj.r + 20; }
@@ -255,8 +284,8 @@
     if (hit(mx,my,banana)){
       const v = 10; // điểm mỗi click
       let banmaoNow = (score+v)/10;
-      if(banmaoNow > MAX_BANMAO_LOCAL){ 
-        statusEl.textContent = "🚫 Max cap "+MAX_BANMAO_LOCAL+" BANMAO";
+      if(banmaoNow > MAX_BANMAO){ 
+        statusEl.textContent = "🚫 Max cap "+MAX_BANMAO+" BANMAO";
         return;
       }
       score += v;
