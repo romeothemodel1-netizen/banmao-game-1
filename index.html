@@ -99,15 +99,33 @@ const isMobile = ()=>/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 /* ********************* WALLETCONNECT *************************/
 const WC_PROJECT_ID='cfda431a5eccf423674b212df85d492c';
 
+// Prefer OKX deep link on Android; fall back to MetaMask and universal
+function openWalletDeepLink(uri){
+  const enc = encodeURIComponent(uri);
+  const seq = [
+    `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
+    `okx://wc?uri=${enc}`,
+    `metamask://wc?uri=${enc}`,
+    `https://metamask.app.link/wc?uri=${enc}`,
+    `https://walletconnect.com/wc?uri=${enc}`
+  ];
+  let i=0; (function step(){ if(i>=seq.length) return; location.href = seq[i++]; setTimeout(step, 1100); })();
+}
+
 async function ensureWC(){
-  // UMD exposes window.WalletConnectProvider.EthereumProvider
-  if (window.WalletConnectProvider?.EthereumProvider) return true;
-  return new Promise((resolve)=>{
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js';
-    s.async=true; s.onload=()=>resolve(true); s.onerror=()=>resolve(false);
-    document.head.appendChild(s);
-  });
+  // Try multiple CDNs because some mobile networks block one of them
+  const OK = () => !!(window.WalletConnectProvider && window.WalletConnectProvider.EthereumProvider);
+  if (OK()) return true;
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
+    'https://unpkg.com/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/walletconnect-ethereum-provider/2.12.0/index.umd.min.js'
+  ];
+  for (const src of urls){
+    await new Promise((resolve)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=resolve; s.onerror=resolve; document.head.appendChild(s); });
+    if (OK()) return true;
+  }
+  return OK();
 }
 
 async function connectWallet(){
@@ -115,17 +133,15 @@ async function connectWallet(){
     if(isMobile()){
       $('status').textContent='⏳ Loading WC...';
       const ok = await ensureWC();
-      if(!ok || !window.WalletConnectProvider?.EthereumProvider){
-        $('status').textContent='❌ WalletConnect lib not loaded';
-        return;
-      }
-      const provider = await window.WalletConnectProvider.EthereumProvider.init({
+      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded'; return; }
+      const EP = window.WalletConnectProvider.EthereumProvider;
+      const provider = await EP.init({
         projectId: WC_PROJECT_ID,
-        chains: [1], optionalChains: [196], rpcMap: {196:'https://rpc.xlayer.tech'},
-        showQrModal: true,
-        metadata: { name:'Banmao Clicker', description:'Connect to claim', url: location.origin, icons:['/favicon.ico'] }
+        chains:[1], optionalChains:[196], rpcMap:{196:'https://rpc.xlayer.tech'},
+        showQrModal:false,
+        metadata:{ name:'Banmao Clicker', description:'Connect', url:location.origin, icons:['/favicon.ico'] }
       });
-      provider.on?.('display_uri', () => { $('status').textContent='🔗 Scan QR with OKX/MetaMask/Trust'; });
+      provider.on?.('display_uri', (uri)=>{ $('status').textContent='🔗 Opening wallet...'; openWalletDeepLink(uri); });
       await provider.connect();
       const accounts = await provider.request({method:'eth_requestAccounts'});
       $('addr').textContent = accounts?.[0] || '—';
