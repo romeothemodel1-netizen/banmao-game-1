@@ -8,6 +8,8 @@
 <!-- Ethers v6 từ cdnjs + fallback sang unpkg -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"
         onerror="(function(){var s=document.createElement('script');s.src='https://unpkg.com/ethers@6.13.2/dist/ethers.umd.min.js';document.head.appendChild(s);}())"></script>
+<!-- WalletConnect (UMD) -->
+<script src="https://unpkg.com/@walletconnect/ethereum-provider/dist/umd/index.min.js"></script>
 
 <style>
   :root { --yellow:#ffd84d; }
@@ -22,6 +24,9 @@
   .progress-wrap{margin-top:12px;background:#1a1a1a;border-radius:8px;overflow:hidden;border:1px solid #222}
   .progress-bar{height:20px;background:var(--yellow);width:0%;transition:width 0.2s ease}
   .progress-text{text-align:center;font-size:13px;margin-top:4px;color:#ccc}
+  /* Mobile banner */
+  .mobile-banner{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .linkbtn{background:#222;color:#fff;border:1px solid #333;border-radius:999px;padding:6px 10px;font-size:13px;text-decoration:none}
 </style>
 </head>
 <body>
@@ -34,11 +39,21 @@
           <option value="auto">Auto (OKX / MetaMask)</option>
           <option value="okx">Force OKX Wallet</option>
           <option value="metamask">Force MetaMask</option>
+          <option value="walletconnect">WalletConnect (QR / Mobile)</option>
         </select>
         <button id="connect" class="btn">Connect Wallet</button>
         <button id="claim" class="btn">Claim BANMAO</button>
       </div>
     </div>
+
+    <!-- Mobile deeplinks -->
+    <div class="mobile-banner">
+      <span style="opacity:.8">On mobile?</span>
+      <a class="linkbtn" href="https://metamask.app.link/dapp/banmao-game.vercel.app">Open in MetaMask</a>
+      <a class="linkbtn" href="okx://wallet/dapp?url=https%3A%2F%2Fbanmao-game.vercel.app">Open in OKX</a>
+      <a class="linkbtn" href="#" id="wcQuick">Use WalletConnect</a>
+    </div>
+
     <div class="row" style="margin-top:-6px;gap:10px">
       <div class="pill">Score: <b id="score">0</b></div>
       <div class="pill">BANMAO earned: <b id="earned">0</b></div>
@@ -46,6 +61,7 @@
       <div class="pill">Balance: <b id="balance">0</b></div>
       <div class="pill">Status: <span id="status">Ready</span></div>
     </div>
+
     <canvas id="game" width="900" height="460" style="margin-top:12px"></canvas>
 
     <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
@@ -59,6 +75,7 @@
   const GAME_ADDR  = "0x0bb69c08a71e4d2297Fb07f95d2d9c6801937143";
   const MAX_BANMAO = 333;
   const XLAYER_CHAIN_ID_HEX = "0xC4"; // 196
+  const WC_PROJECT_ID = "cfda431a5eccf423674b212df85d492c"; // <- điền Project ID WalletConnect
 
   const GAME_ABI = [
     "function claimReward(uint256 score) external",
@@ -73,17 +90,38 @@
   const walletSelect = document.getElementById("walletSelect");
   const connectBtn = document.getElementById("connect");
   const claimBtn   = document.getElementById("claim");
+  const wcQuickBtn = document.getElementById("wcQuick");
   const addrEl   = document.getElementById("addr");
   const balEl    = document.getElementById("balance");
   const statusEl = document.getElementById("status");
 
   // ====== Helpers ======
-  function pickInjected(mode="auto"){
+  function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
+
+  async function getWalletConnectProvider() {
+    if (!window.WalletConnectProvider) {
+      alert("WalletConnect lib chưa tải. Refresh trang.");
+      return null;
+    }
+    const provider = await window.WalletConnectProvider.EthereumProvider.init({
+      projectId: WC_PROJECT_ID,
+      chains: [196], // X Layer
+      rpcMap: { 196: "https://rpc.xlayer.tech" },
+      showQrModal: true,
+      methods: ["eth_requestAccounts","eth_sendTransaction","wallet_switchEthereumChain","wallet_addEthereumChain"],
+      events: ["chainChanged","accountsChanged","disconnect"]
+    });
+    await provider.connect(); // desktop: mở QR; mobile: mở danh sách app ví
+    return provider;
+  }
+
+  async function pickInjected(mode="auto"){
+    if (mode === "walletconnect") return await getWalletConnectProvider();
     const okx = window.okxwallet?.ethereum || window.okxwallet || null;
     const mm  = window.ethereum || null;
     if (mode==="okx") return okx;
     if (mode==="metamask") return mm;
-    return okx || mm;
+    return okx || mm; // auto
   }
 
   async function ensureXLayer(injected){
@@ -92,7 +130,7 @@
       if (id === XLAYER_CHAIN_ID_HEX) return;
       await injected.request({ method:"wallet_switchEthereumChain", params:[{ chainId: XLAYER_CHAIN_ID_HEX }] });
     }catch(e){
-      if (e?.code===4902){
+      if (e?.code===4902 || /Unrecognized/i.test(e?.message||"")){
         await injected.request({ method:"wallet_addEthereumChain", params:[{
           chainId: XLAYER_CHAIN_ID_HEX,
           chainName: "X Layer Mainnet",
@@ -106,7 +144,7 @@
 
   function waitForEthers(){
     return new Promise(resolve=>{
-      const tick=()=>{ if (window.ethers) resolve(); else setTimeout(tick,150); };
+      const tick=()=>{ if (window.ethers) resolve(); else setTimeout(tick,120); };
       tick();
     });
   }
@@ -114,22 +152,33 @@
   // ====== Runtime state ======
   let provider, signer, account, tokenDecimals=18;
 
-  // ====== Connect (KHÔNG phụ thuộc ethers để bật popup) ======
+  wcQuickBtn.onclick = (e)=>{ e.preventDefault(); walletSelect.value = "walletconnect"; connectBtn.click(); };
+
+  // ====== Connect (desktop/mobile + WalletConnect) ======
   connectBtn.onclick = async () => {
     try{
       statusEl.textContent = "🔎 Tìm ví...";
-      const injected = pickInjected(walletSelect.value);
-      if (!injected){ alert("❌ Không thấy ví (MetaMask/OKX). Cài extension rồi refresh."); statusEl.textContent="No wallet"; return; }
+      const injected = await pickInjected(walletSelect.value);
+      if (!injected){
+        if (isMobile()) alert("Không tìm thấy ví. Hãy dùng nút Open in MetaMask/OKX phía trên hoặc chọn WalletConnect.");
+        else alert("Không thấy ví (MetaMask/OKX). Cài extension rồi refresh.");
+        statusEl.textContent="No wallet";
+        return;
+      }
 
       statusEl.textContent = "🧾 Yêu cầu quyền...";
       const accounts = await injected.request({ method:"eth_requestAccounts" });
       account = accounts?.[0];
       if (!account){ statusEl.textContent = "No account"; return; }
 
-      statusEl.textContent = "🔁 Kiểm tra mạng...";
-      await ensureXLayer(injected);
+      // Switch chain (một số ví qua WalletConnect có thể không cho auto switch)
+      try {
+        statusEl.textContent = "🔁 Kiểm tra mạng...";
+        await ensureXLayer(injected);
+      } catch {
+        statusEl.textContent = "⚠️ Hãy chuyển sang X Layer (196) trong ví rồi bấm lại.";
+      }
 
-      // Chỉ cần ethers từ đây trở đi
       await waitForEthers();
       provider = new ethers.BrowserProvider(injected);
       signer   = await provider.getSigner();
@@ -154,7 +203,6 @@
       balEl.textContent = ethers.formatUnits(bal, tokenDecimals);
     }catch(e){ balEl.textContent="—"; }
   }
-
   async function checkClaimed(){
     try{
       if (!provider || !account) return;
@@ -197,14 +245,19 @@
     const x = 200, y = 250, r = 60;
     ctx.fillStyle='#ffd84d';
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    // ears
     ctx.beginPath(); ctx.moveTo(x-r*0.6, y-r*0.3); ctx.lineTo(x-r*0.2, y-r*1.0); ctx.lineTo(x-r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(x+r*0.6, y-r*0.3); ctx.lineTo(x+r*0.2, y-r*1.0); ctx.lineTo(x+r*0.05, y-r*0.3); ctx.closePath(); ctx.fill();
+    // eyes
     ctx.fillStyle='#111';
     ctx.beginPath(); ctx.arc(x-r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(x+r*0.35, y-r*0.1, 6,0,Math.PI*2); ctx.fill();
+    // nose
     ctx.beginPath(); ctx.moveTo(x-5,y+10); ctx.lineTo(x+5,y+10); ctx.lineTo(x,y+16); ctx.closePath(); ctx.fill();
+    // mouth
     ctx.strokeStyle='#111'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(x-5,y+20,7,0,Math.PI); ctx.arc(x+5,y+20,7,0,Math.PI); ctx.stroke();
+    // whiskers
     ctx.beginPath(); ctx.moveTo(x-20,y+5);  ctx.lineTo(x-45,y);    ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x-20,y+12); ctx.lineTo(x-45,y+15); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x+20,y+5);  ctx.lineTo(x+45,y);    ctx.stroke();
