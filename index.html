@@ -200,7 +200,7 @@ $('claim').addEventListener('click', async ()=>{
 });
 
 /*********************** QUICK BUTTONS (mobile) *************************/
-const quick = (pref)=>async(e)=>{ e.preventDefault(); try{ $('status').textContent='🔗 Opening wallet...'; const p=await startWalletConnect(pref); if(!p) $('status').textContent='❌ WalletConnect not available'; }catch(err){ $('status').textContent='❌ '+(err?.message||err); } };
+const quick = (pref)=>async(e)=>{ e.preventDefault(); try{ $('status').textContent='🔗 Opening wallet...'; if (isMobile()) { try{ __deepLinkWindow = window.open('', '_blank'); }catch{} } const p=await startWalletConnect(pref); if(!p){ $('status').textContent='❌ WalletConnect not available'; if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } } }catch(err){ $('status').textContent='❌ '+(err?.message||err); if(__deepLinkWindow){ try{ __deepLinkWindow.close(); }catch{} } } };
 $('openMM')?.addEventListener('click', quick('metamask'));
 $('openOKX')?.addEventListener('click', quick('okx'));
 $('openTrust')?.addEventListener('click', quick('trust'));
