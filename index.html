@@ -7,7 +7,7 @@
 
 <!-- Ethers v6 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.2/ethers.umd.min.js"></script>
-<!-- WalletConnect v2 UMD build -->
+<!-- WalletConnect v2 UMD (primary) -->
 <script src="https://unpkg.com/@walletconnect/ethereum-provider/dist/umd/index.min.js"></script>
 
 <style>
@@ -41,6 +41,9 @@
           <option value="metamask">Force MetaMask</option>
           <option value="trust">Force Trust Wallet</option>
           <option value="walletconnect">WalletConnect (QR / Mobile)</option>
+          <option value="coinbase">Force Coinbase Wallet</option>
+          <option value="rainbow">Force Rainbow</option>
+          <option value="bitget">Force Bitget</option>
         </select>
         <button id="connect" class="btn">Connect Wallet</button>
         <button id="claim" class="btn">Claim BANMAO</button>
@@ -49,9 +52,12 @@
 
     <div class="mobile-banner">
       <span style="opacity:.8">On mobile?</span>
-      <a class="linkbtn" href="#" id="openMM">Connect MetaMask</a>
-      <a class="linkbtn" href="#" id="openOKX">Connect OKX</a>
-      <a class="linkbtn" href="#" id="openTrust">Connect Trust</a>
+      <a class="linkbtn" href="#" id="openMM">MetaMask</a>
+      <a class="linkbtn" href="#" id="openOKX">OKX</a>
+      <a class="linkbtn" href="#" id="openTrust">Trust</a>
+      <a class="linkbtn" href="#" id="openCBW">Coinbase</a>
+      <a class="linkbtn" href="#" id="openRainbow">Rainbow</a>
+      <a class="linkbtn" href="#" id="openBitget">Bitget</a>
       <a class="linkbtn" href="#" id="wcQuick">WalletConnect Auto</a>
     </div>
 
@@ -186,27 +192,77 @@ const statusEl = document.getElementById("status");
 
 function isMobile(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
 
-function openWalletDeepLink(uri, preferred="metamask"){
+// --- Robust loader for WalletConnect UMD with fallbacks
+async function ensureWCLib(){
+  if (window.WalletConnectProvider?.EthereumProvider) return true;
+  statusEl.textContent = '⏳ Loading WC lib...';
+  const sources = [
+    'https://unpkg.com/@walletconnect/ethereum-provider/dist/umd/index.min.js',
+    'https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider/dist/umd/index.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/walletconnect/2.11.3/ethereum-provider.umd.min.js'
+  ];
+  for (const src of sources){
+    const ok = await new Promise(res=>{
+      const s=document.createElement('script');
+      s.src=src; s.async=true; s.onload=()=>res(true); s.onerror=()=>res(false);
+      document.head.appendChild(s);
+    });
+    if (ok && window.WalletConnectProvider?.EthereumProvider) return true;
+  }
+  return false;
+}
+
+// Build deeplink targets (exported for tests)
+function buildWCLinks(uri){
   const enc = encodeURIComponent(uri);
-  const links = {
+  return {
     metamaskHttps: `https://metamask.app.link/wc?uri=${enc}`,
     metamask:      `metamask://wc?uri=${enc}`,
     okx:           `okx://wc?uri=${enc}`,
     trustHttps:    `https://link.trustwallet.com/wc?uri=${enc}`,
     trust:         `trust://wc?uri=${enc}`,
+    coinbaseHttps: `https://go.cb-w.com/wc?uri=${enc}`,
+    coinbase:      `coinbase://wallet/wc?uri=${enc}`,
+    rainbowHttps:  `https://rainbow.me/wc?uri=${enc}`,
+    rainbow:       `rainbow://wc?uri=${enc}`,
+    bitget:        `bitkeep://wc?uri=${enc}`,
     universal:     `https://walletconnect.com/wc?uri=${enc}`
   };
-  if (preferred === "metamask") {
-    location.href = links.metamaskHttps; setTimeout(()=>location.href=links.metamask,800); setTimeout(()=>location.href=links.universal,1600);
-  } else if (preferred === "okx") {
-    location.href = links.okx; setTimeout(()=>location.href=links.universal,1200);
-  } else if (preferred === "trust") {
-    location.href = links.trustHttps; setTimeout(()=>location.href=links.trust,800); setTimeout(()=>location.href=links.universal,1600);
-  } else { location.href = links.universal; }
+}
+
+function openWalletDeepLink(uri, preferred="metamask"){
+  // Cross-browser deeplink helper with multiple fallbacks (Android/iOS + Chrome/Safari/Firefox/Opera/Samsung)
+  const links = buildWCLinks(uri);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  const openSeq = (arr)=>{
+    let i=0; const tryNext=()=>{ if(i>=arr.length) return; const href=arr[i++];
+      if (isIOS) { window.location.href = href; setTimeout(tryNext, 900); }
+      else {
+        try{ window.location.href = href; }catch{}
+        setTimeout(()=>{
+          const needsIframe = /^(metamask|trust|okx|rainbow|bitkeep|coinbase):\/\//.test(href);
+          if(needsIframe){
+            const iframe=document.createElement('iframe'); iframe.style.display='none'; iframe.src=href; document.body.appendChild(iframe); setTimeout(()=>iframe.remove(),1200);
+          }
+          tryNext();
+        }, 900);
+      }
+    }; tryNext();
+  };
+
+  if (preferred === 'metamask')      openSeq([links.metamaskHttps, links.metamask, links.universal]);
+  else if (preferred === 'okx')      openSeq([links.okx, links.universal]);
+  else if (preferred === 'trust')    openSeq([links.trustHttps, links.trust, links.universal]);
+  else if (preferred === 'coinbase') openSeq([links.coinbaseHttps, links.coinbase, links.universal]);
+  else if (preferred === 'rainbow')  openSeq([links.rainbowHttps, links.rainbow, links.universal]);
+  else if (preferred === 'bitget')   openSeq([links.bitget, links.universal]);
+  else                               openSeq([links.universal]);
 }
 
 async function getWalletConnectProvider(preferred="metamask"){
-  if (!window.WalletConnectProvider){ alert('WalletConnect lib chưa tải. Refresh trang.'); return null; }
+  const ok = await ensureWCLib();
+  if (!ok){ statusEl.textContent = '❌ Không tải được WalletConnect'; alert('WalletConnect lib chưa tải. Vui lòng mở lại trang.'); return null; }
   const provider = await window.WalletConnectProvider.EthereumProvider.init({
     projectId: WC_PROJECT_ID,
     chains: [1], optionalChains: [196], rpcMap: { 196: 'https://rpc.xlayer.tech' },
@@ -215,17 +271,20 @@ async function getWalletConnectProvider(preferred="metamask"){
     methods:["eth_requestAccounts","eth_sendTransaction","personal_sign","wallet_switchEthereumChain","wallet_addEthereumChain"],
     events:["chainChanged","accountsChanged","disconnect"]
   });
+  // important: deeplink as soon as URI is available
   provider.on?.('display_uri', (uri)=>{ if(isMobile()) openWalletDeepLink(uri, preferred); });
   await provider.connect();
   return provider;
 }
 
 async function pickInjected(mode){
-  if (mode === 'walletconnect' || isMobile()) return await getWalletConnectProvider(mode==='trust'?'trust':(mode==='okx'?'okx':'metamask'));
+  // On mobile (or when selecting WalletConnect/other wallets), prefer WalletConnect + deeplink
+  if (mode === 'walletconnect' || isMobile() || ['trust','coinbase','rainbow','bitget'].includes(mode))
+    return await getWalletConnectProvider(mode);
   const okx = (window.okxwallet?.ethereum || window.okxwallet) || null;
   const mm  = (window.ethereum && window.ethereum.isMetaMask) ? window.ethereum : null;
-  const eth = window.ethereum || null; // Trust/others
-  if (mode==='okx') return okx; if (mode==='metamask') return mm; if(mode==='trust') return eth; return okx || mm || eth;
+  const eth = window.ethereum || null; // generic injected
+  if (mode==='okx') return okx; if (mode==='metamask') return mm; return okx || mm || eth;
 }
 
 async function ensureXLayer(injected){
@@ -268,6 +327,22 @@ connectBtn.addEventListener('click', async ()=>{
   }catch(err){ console.error('CONNECT_ERR',err); statusEl.textContent='❌ '+(err?.shortMessage||err?.message||err); }
 });
 
+// Quick buttons (mobile)
+const openMM     = document.getElementById('openMM');
+const openOKX    = document.getElementById('openOKX');
+const openTrust  = document.getElementById('openTrust');
+const openCBW    = document.getElementById('openCBW');
+const openRainbow= document.getElementById('openRainbow');
+const openBitget = document.getElementById('openBitget');
+const wcQuickBtn = document.getElementById('wcQuick');
+openMM?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('metamask'); });
+openOKX?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('okx'); });
+openTrust?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('trust'); });
+openCBW?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('coinbase'); });
+openRainbow?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('rainbow'); });
+openBitget?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('bitget'); });
+wcQuickBtn?.addEventListener('click', async (e)=>{ e.preventDefault(); await getWalletConnectProvider('metamask'); });
+
 claimBtn.addEventListener('click', async ()=>{
   try{
     if(!signer) return alert('Connect wallet first!');
@@ -279,6 +354,16 @@ claimBtn.addEventListener('click', async ()=>{
     statusEl.textContent='✅ Claim succeeded ('+amount+' BANMAO)'; await updateBalance(); await checkClaimed();
   }catch(e){ statusEl.textContent='❌ '+(e?.shortMessage||e?.reason||e?.message||e); claimBtn.disabled=false; }
 });
+
+// =================== SELF TESTS (non-intrusive) ===================
+(function selfTests(){
+  const results=[]; const log=(name, ok, detail='')=>{ const tag=ok?'PASS':'FAIL'; console.log(`[SelfTest] ${tag} ${name}`, detail); };
+  try{ const links=buildWCLinks('wc:test');
+       const ok = links.metamaskHttps.includes('wc%3Atest') && links.metamask.startsWith('metamask://');
+       log('buildWCLinks', ok, links); } catch(e){ log('buildWCLinks', false, e); }
+  try{ log('getWalletConnectProvider exists', typeof getWalletConnectProvider==='function'); } catch(e){ log('getWalletConnectProvider exists', false, e); }
+  try{ log('connect button exists', !!document.getElementById('connect')); } catch(e){ log('connect button exists', false, e); }
+})();
 </script>
 
 </body>
