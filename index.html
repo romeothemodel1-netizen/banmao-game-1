@@ -91,6 +91,74 @@ $('connect').addEventListener('click',async()=>{
     }
   }catch(e){$('status').textContent='❌ '+e.message;}
 });
+// ===== WalletConnect helpers for mobile (OKX focus) =====
+const WC_PROJECT_ID = 'cfda431a5eccf423674b212df85d492c';
+function okxDeepLinks(uri){
+  const enc = encodeURIComponent(uri);
+  return [
+    `intent://wc?uri=${enc}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fwalletconnect.com%2Fwc%3Furi%3D${enc};end`,
+    `okx://wc?uri=${enc}`,
+    `https://walletconnect.com/wc?uri=${enc}`
+  ];
+}
+let __dlWin = null;
+function launchOKX(uri){
+  const seq = okxDeepLinks(uri);
+  const nav = (href)=>{
+    try{ if(__dlWin && !__dlWin.closed){ __dlWin.location.href = href; } else { location.href = href; } }
+    catch{ location.href = href; }
+  };
+  let i=0; (function step(){ if(i>=seq.length) return; nav(seq[i++]); setTimeout(step, 900); })();
+}
+async function ensureWC(){
+  if (window.WalletConnectProvider?.EthereumProvider) return true;
+  return new Promise(res=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.12.0/dist/umd/index.min.js';
+    s.onload=()=>res(!!window.WalletConnectProvider?.EthereumProvider);
+    s.onerror=()=>res(false);
+    document.head.appendChild(s);
+  });
+}
+async function connectWithWalletConnectOKX(){
+  const ok = await ensureWC();
+  if(!ok){ $('status').textContent='❌ WalletConnect unavailable'; return null; }
+  const provider = await window.WalletConnectProvider.EthereumProvider.init({
+    projectId: WC_PROJECT_ID,
+    chains:[196], // X Layer on OKX
+    rpcMap:{196:'https://rpc.xlayer.tech'},
+    showQrModal: !isMobile(),
+    metadata:{ name:'Banmao Clicker', description:'Connect to claim', url: location.origin, icons:['/favicon.ico'] },
+    methods:["eth_requestAccounts","wallet_switchEthereumChain","wallet_addEthereumChain"],
+    events:["display_uri","accountsChanged","chainChanged","disconnect"]
+  });
+  provider.on?.('display_uri', (uri)=>{ if(isMobile()){ $('status').textContent='🔗 Opening OKX...'; launchOKX(uri); } });
+  await provider.connect();
+  return provider;
+}
+
+// ===== Connect button (injected on desktop, WC on mobile/OKX) =====
+$('connect').addEventListener('click', async()=>{
+  try{
+    $('status').textContent='🔎 Connecting...';
+    let injected=null;
+    if(!isMobile() && window.ethereum){
+      injected = window.ethereum; // desktop MetaMask/OKX extension
+    } else {
+      try{ __dlWin = window.open('', '_blank'); }catch{}
+      injected = await connectWithWalletConnectOKX();
+    }
+    if(!injected){ $('status').textContent='❌ Wallet not found'; try{__dlWin?.close();}catch{} return; }
+    // request accounts
+    const accounts = await (injected.request ? injected.request({method:'eth_requestAccounts'}) : injected.enable?.());
+    const account = (Array.isArray(accounts)?accounts[0]: (injected.accounts?.[0]||null));
+    if(!account){ $('status').textContent='❌ No account'; try{__dlWin?.close();}catch{} return; }
+    // show address
+    $('addr').textContent = account;
+    $('status').textContent = '✅ Connected';
+    try{__dlWin?.close();}catch{}
+  }catch(e){ $('status').textContent='❌ '+(e?.message||e); try{__dlWin?.close();}catch{} }
+});
 </script>
 </body>
 </html>
