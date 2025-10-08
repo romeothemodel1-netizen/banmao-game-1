@@ -151,12 +151,23 @@ function showMobileFallback(){
   document.getElementById('openMM').setAttribute('href',`https://metamask.app.link/dapp/${location.host}${location.pathname}`);
 }
 
+// Auto open DApp inside wallet if WC library cannot be loaded on mobile networks
+function tryOpenWalletDapp(){
+  const dapp = encodeURIComponent(location.href);
+  const seq = [
+    `intent://wallet/dapp?url=${dapp}#Intent;scheme=okx;package=com.okinc.okex.gp;S.browser_fallback_url=https%3A%2F%2Fmetamask.app.link%2Fdapp%2F${location.host}${location.pathname};end`,
+    `okx://wallet/dapp?url=${dapp}`,
+    `https://metamask.app.link/dapp/${location.host}${location.pathname}`
+  ];
+  let i=0; (function step(){ if(i>=seq.length) return; location.href=seq[i++]; setTimeout(step,1100); })();
+}
+
 async function connectWallet(){
   try{
     if(isMobile()){
       $('status').textContent='⏳ Loading WC...';
       const ok = await ensureWC();
-      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded'; showMobileFallback(); return; }
+      if(!ok){ $('status').textContent='❌ WalletConnect lib not loaded → opening wallet DApp'; showMobileFallback(); tryOpenWalletDapp(); return; }
       const EP = getEP();
       const provider = await EP.init({
         projectId: WC_PROJECT_ID,
